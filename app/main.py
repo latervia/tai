@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routers import chat
 from app.core.lifecycle import startup_event, shutdown_event
 
 
@@ -24,7 +26,7 @@ def create_app() -> FastAPI:
     )
 
     # 注册路由
-    # app.include_router(conversation.router, prefix="/api")
+    app.include_router(chat.router, prefix="/api")
 
     # 健康检查
     @app.get("/health")
@@ -42,6 +44,16 @@ app = create_app()
 async def log_middleware(request, call_next):
     response = await call_next(request)
     return response
+
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # 异常统一处理
