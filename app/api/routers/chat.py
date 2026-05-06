@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage, SystemMessage
 
