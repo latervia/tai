@@ -3,8 +3,8 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 class MessageAdapter:
     ROLE_MAP = {
-        "user": HumanMessage,
-        "assistant": AIMessage,
+        "human": HumanMessage,
+        "ai": AIMessage,
         "system": SystemMessage,
     }
 
@@ -18,6 +18,6 @@ class MessageAdapter:
     @staticmethod
     def from_langchain(message):
         return {
-            "role": "assistant",
+            "role": "ai",
             "content": message.content
         }
