@@ -57,6 +57,12 @@ class MinioSettings(BaseConfig):
     access_secret: str = Field(alias="MINIO_ACCESS_SECRET")
     endpoint: str = Field(alias="MINIO_ENDPOINT")
 
+class RedisSettings(BaseConfig):
+    host: str = Field(alias="REDIS_HOST")
+    port: int = Field(alias="REDIS_PORT")
+    db: int = Field(alias="REDIS_DB")
+    password: str = Field(alias="REDIS_PASSWORD")
+
 
 class Settings(BaseConfig):
     """全局配置"""
@@ -66,6 +72,7 @@ class Settings(BaseConfig):
     minio: MinioSettings = Field(default_factory=MinioSettings)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
 
 
 @lru_cache

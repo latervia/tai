@@ -1,7 +1,10 @@
 # 如果有 Milvus / Redis / ES 也在这里初始化
+from app.core.redis_manager import redis_client
+
 
 async def startup_event():
     print("Starting up...")
+    await redis_client.init_redis()
     # await init_llm()
     # init_vector_db()
     # init_cache()
