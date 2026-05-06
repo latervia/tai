@@ -2,4 +2,4 @@
 .vscode
 
 .venv/
-.env
+.env*
