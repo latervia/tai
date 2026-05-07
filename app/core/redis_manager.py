@@ -1,13 +1,11 @@
 import json
-import logging
 from typing import Any, Optional, Union
 
 import redis.asyncio as redis
 from redis.asyncio.client import Redis
 
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
+from app.core.logger import logger
 
 
 class RedisManager:
