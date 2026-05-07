@@ -8,5 +8,7 @@ dependencies = [
     "langchain>=1.2.17",
     "langchain-openai>=1.2.1",
     "langgraph>=1.1.10",
+    "langgraph-checkpoint-redis>=0.4.1",
     "redis>=7.4.0",
+    "uuid6>=2025.0.1",
 ]
