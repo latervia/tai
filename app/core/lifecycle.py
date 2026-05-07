@@ -5,7 +5,7 @@ from app.core.redis_manager import redis_client
 
 async def startup_event():
     logger.info("Starting up...")
-    await redis_client.init_redis()
+    # await redis_client.init_redis()
     # await init_llm()
     # init_vector_db()
     # init_cache()
