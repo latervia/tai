@@ -1,23 +1,38 @@
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 
+from app.api.rest.result import Result
+from app.models.postgre_models import DocumentModel
+from app.schemas.rag import KBCreateReq, KBRes, DocumentRes
 from app.services.rag_service import RagService, get_rag_service
 
 router = APIRouter(prefix="/rag")
 
 
-@router.post("/list", description="获取知识库列表")
-def knowledge_base_list():
-    pass
-
-
 @router.post("/create", description="创建知识库")
-def knowledge_base_create(service: RagService = Depends(get_rag_service)):
-    pass
+def knowledge_base_create(req: KBCreateReq, service: RagService = Depends(get_rag_service)):
+    res = service.create(req)
+    return Result.success(data=res)
 
 
-@router.post("/delete", description="删除知识库")
-def knowledge_base_delete():
-    pass
+@router.post("/list", response_model=Result[List[KBRes]], description="获取知识库列表")
+def knowledge_base_list(service: RagService = Depends(get_rag_service)):
+    res = service.list()
+    return Result.success(data=res)
+
+
+@router.post("/delete/{kb_id}", description="删除知识库")
+def knowledge_base_delete(kb_id: int, service: RagService = Depends(get_rag_service)):
+    res = service.delete(kb_id)
+    return Result.success(data=res)
+
+
+@router.post("/doc/list", response_model=Result[List[DocumentRes]], description="获取知识库文档列表")
+def knowledge_base_doc_list(kb_id: UUID = None, service: RagService = Depends(get_rag_service)):
+    res = service.doc_list(kb_id)
+    return Result.success(data=res)
 
 
 @router.post("/doc/upload", description="上传文档")

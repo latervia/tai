@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import chat
+from app.api.routers import chat, rag
 from app.core.lifecycle import startup_event, shutdown_event
 
 
@@ -22,11 +22,13 @@ def create_app() -> FastAPI:
         title="Agent System",
         version="1.0.0",
         description="Multi-Agent + RAG System",
-        lifespan=lifespan
+        lifespan=lifespan,
+        openapi_prefix="/api"
     )
 
     # 注册路由
-    app.include_router(chat.router, prefix="/api")
+    app.include_router(chat.router)
+    app.include_router(rag.router)
 
     # 健康检查
     @app.get("/health")
