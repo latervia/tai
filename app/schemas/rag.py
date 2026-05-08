@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -18,13 +19,13 @@ class KBRes(BaseModel):
 
 class DocumentRes(BaseModel):
     id: UUID
-    kb_id: UUID
+    # kb_id: UUID
     file_name: str
-    file_type: str
-    file_size: int
-    doc_hash: str
-    source_url: str
-    status: str
-    error_msg: str
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    doc_hash: Optional[str] = None
+    source_url: Optional[str] = None
+    status: Optional[str] = None
+    error_msg: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

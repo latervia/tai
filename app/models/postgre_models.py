@@ -31,7 +31,7 @@ class DocumentModel(Base):
     __tablename__ = "tbl_document"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    kb_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))  # 仅逻辑关联
+    # kb_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))  # 仅逻辑关联
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[Optional[str]] = mapped_column(String(50))
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger)
