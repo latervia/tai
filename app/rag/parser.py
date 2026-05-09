@@ -11,7 +11,7 @@ from app.core.llm import ollama
 from app.core.minio_manager import MinioManager
 
 
-class RagDocLayout:
+class DocLayout:
     FILE_ORIGINAL = "original.pdf"  # 原始文件
     FILE_CONTENT = "content.md"  # 解析后的Markdown
     FILE_METADATA = "metadata.json"  # 元数据
@@ -20,7 +20,7 @@ class RagDocLayout:
 
 
 """
-文档提取主流程: Docling(Document AST) => VLM(Markdown)
+文档解析主流程: Docling(Document AST) => VLM(Markdown)
 
 bucket-name (如: rag-data)
 └── documents/
@@ -35,16 +35,16 @@ bucket-name (如: rag-data)
 """
 
 
-class DocConvertor:
+class Parser:
 
     def __init__(self, minio: MinioManager):
         self.converter = DocumentConverter()
         self.minio = minio
 
-    def convert_pdf(self, doc_id: str) -> Dict[str, Any]:
-        """将PDF文档转换为Markdown格式"""
+    def parse_pdf(self, doc_id: str) -> Dict[str, Any]:
+        """将PDF文档转换为Markdown格式 并存储到minio"""
 
-        original_name = doc_id + "/" + RagDocLayout.FILE_ORIGINAL
+        original_name = doc_id + "/" + DocLayout.FILE_ORIGINAL
 
         temp_path = self.minio.download_to_temp(original_name)
 
@@ -76,7 +76,11 @@ class DocConvertor:
         final_markdown = "\n\n".join(markdown_parts)
 
         # 存储markdown 观测解析结果 + 减少重复解析
-        self.minio.upload(io.BytesIO(final_markdown.encode("utf-8")), f"{doc_id}/{RagDocLayout.FILE_CONTENT}")
+        self.minio.upload(io.BytesIO(final_markdown.encode("utf-8")), f"{doc_id}/{DocLayout.FILE_CONTENT}")
+
+        return {
+            "markdown": final_markdown,
+        }
 
     def _process_item(self, doc_id, item, pdf_doc) -> str:
         """处理Docling解析输出的文档元素"""
@@ -136,6 +140,8 @@ class DocConvertor:
 
         result = self._vl_inference(image_base64, prompt=prompt)
 
+        # TODO 处理表格结果加上原图 obj_name
+        # result: {图片名称：xxx，图片内容：xxx} 使用markdown格式
         return result
 
     def _process_figure(self, doc_id, item, pdf_doc) -> str:
@@ -206,7 +212,7 @@ class DocConvertor:
             image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
             # 存储到Minio
-            image_name = f"{doc_id}/{RagDocLayout.DIR_ASSETS}/img_p{page_no + 1}_{item.id}.png"
+            image_name = f"{doc_id}/{DocLayout.DIR_ASSETS}/img_p{page_no + 1}_{item.id}.png"
             self.minio.upload(buffer, image_name)
 
             return image_base64
