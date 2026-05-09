@@ -1,3 +1,24 @@
+import base64
+import inspect
+import io
+from typing import Dict, Any
+
+import fitz
+from PIL import Image
+from docling.document_converter import DocumentConverter
+
+from app.core.llm import ollama
+from app.core.minio_manager import MinioManager
+
+
+class RagDocLayout:
+    FILE_ORIGINAL = "original.pdf"  # 原始文件
+    FILE_CONTENT = "content.md"  # 解析后的Markdown
+    FILE_METADATA = "metadata.json"  # 元数据
+
+    DIR_ASSETS = "assets"  # 存放图片
+
+
 """
 文档提取主流程: Docling(Document AST) => VLM(Markdown)
 
@@ -11,30 +32,7 @@ bucket-name (如: rag-data)
             ├── img_p1_1.png       # 命名建议：页码_序号
             ├── img_p5_1.jpg
             └── ...
-
-ai-knowledge-base/doc-id/original.pdf
-ai-knowledge-base/doc-id/content.md
-ai-knowledge-base/doc-id/metadata.json
-ai-knowledge-base/doc-id/assets/img_p1_1.png
-
 """
-import inspect
-from typing import Dict, Any
-
-import fitz
-import ollama
-from PIL import Image
-from docling.document_converter import DocumentConverter
-
-from app.core.minio_manager import MinioManager
-
-
-class RagDocLayout:
-    FILE_ORIGINAL = "original.pdf"  # 原始文件
-    FILE_CONTENT = "content.md"  # 解析后的Markdown
-    FILE_METADATA = "metadata.json"  # 元数据
-
-    DIR_ASSETS = "assets"  # 存放图片
 
 
 class DocConvertor:
@@ -44,6 +42,7 @@ class DocConvertor:
         self.minio = minio
 
     def convert_pdf(self, doc_id: str) -> Dict[str, Any]:
+        """将PDF文档转换为Markdown格式"""
 
         original_name = doc_id + "/" + RagDocLayout.FILE_ORIGINAL
 
@@ -76,17 +75,11 @@ class DocConvertor:
 
         final_markdown = "\n\n".join(markdown_parts)
 
-        # todo 存储markdown 观测解析结果 减少重复解析
-
-        return {
-            "markdown": final_markdown
-        }
-
-    # =========================================================
-    # Item Process
-    # =========================================================
+        # 存储markdown 观测解析结果 + 减少重复解析
+        self.minio.upload(io.BytesIO(final_markdown.encode("utf-8")), f"{doc_id}/{RagDocLayout.FILE_CONTENT}")
 
     def _process_item(self, doc_id, item, pdf_doc) -> str:
+        """处理Docling解析输出的文档元素"""
 
         label = getattr(item, "label", "")
 
@@ -112,6 +105,7 @@ class DocConvertor:
         return ""
 
     def _extract_text(self, item) -> str:
+        """从文档元素中提取文本内容"""
 
         text = getattr(item, "text", "")
 
@@ -121,13 +115,12 @@ class DocConvertor:
         return text.strip()
 
     def _process_table(self, doc_id, item, pdf_doc) -> str:
+        """处理文档中的表格元素"""
 
-        image = self._crop_item_image(doc_id, item, pdf_doc)
+        image_base64 = self._crop_item_image(doc_id, item, pdf_doc)
 
-        if image is None:
+        if image_base64 is None:
             return ""
-
-        image_path = self._save_temp_image(image)
 
         prompt = inspect.cleandoc("""
             你是专业文档解析助手。
@@ -141,21 +134,17 @@ class DocConvertor:
             5. 不要编造数据
         """)
 
-        result = self._vl_inference(
-            image_path=image_path,
-            prompt=prompt,
-        )
+        result = self._vl_inference(image_base64, prompt=prompt)
 
         return result
 
     def _process_figure(self, doc_id, item, pdf_doc) -> str:
+        """处理文档中的图片元素"""
 
-        image = self._crop_item_image(doc_id, item, pdf_doc)
+        image_base64 = self._crop_item_image(doc_id, item, pdf_doc)
 
-        if image is None:
+        if image_base64 is None:
             return ""
-
-        image_path = self._save_temp_image(image)
 
         prompt = inspect.cleandoc("""
             请分析这张文档图片。
@@ -169,19 +158,15 @@ class DocConvertor:
             5. 简洁准确
         """)
 
-        result = self._vl_inference(
-            image_path=image_path,
-            prompt=prompt,
-        )
+        result = self._vl_inference(image_base64, prompt=prompt)
 
         return f"\n[FIGURE]\n{result}\n"
 
     def _crop_item_image(self, doc_id, item, pdf_doc):
         """
-        根据item的prov信息，从pdf_doc中裁剪出item的图片
-        :param item:
-        :param pdf_doc:
-        :return:
+            1. 根据item的prov信息 fitz从pdf_doc中裁剪出item的图片
+            2. 将图片存储到minio
+            3. 返回图片Base64编码
         """
 
         prov = getattr(item, "prov", None)
@@ -214,44 +199,37 @@ class DocConvertor:
                 pix.samples,
             )
 
-            # TODO 存储到Minio
-            image_name = f"{doc_id}/assets/img_p{page_no + 1}_{item.id}.png"
+            buffer = io.BytesIO()
+            image.save(buffer, format="png")
+            buffer.seek(0)
 
-            return image
+            image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+            # 存储到Minio
+            image_name = f"{doc_id}/{RagDocLayout.DIR_ASSETS}/img_p{page_no + 1}_{item.id}.png"
+            self.minio.upload(buffer, image_name)
+
+            return image_base64
 
         except Exception as e:
             print(f"[ERROR] crop failed: {e}")
             return None
 
-    def _vl_inference(
-            self,
-            image_path: str,
-            prompt: str,
-    ) -> str:
-        """
-        使用 VLM 进行视觉语言推理
-        :param image_path: 图片路径
-        :param prompt: 提示语
-        :return: 推理结果
-        """
+    def _vl_inference(self, image_base64: str, prompt: str) -> str:
+        """使用 VLM 进行视觉语言推理 获得图片描述"""
 
-        response = ollama.chat(
-            model=self.model_name,
-            messages=[
+        message = {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
                 {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [image_path],
-                }
+                    "type": "image",
+                    "base64": image_base64,
+                    "mime_type": "image/jpeg",
+                },
             ]
-        )
+        }
+
+        response = ollama().invoke(message)
 
         return response["message"]["content"]
-
-    def _save_temp_image(self, image: Image.Image) -> str:
-
-        temp_path = self.output_dir / "temp_crop.png"
-
-        image.save(temp_path)
-
-        return str(temp_path)

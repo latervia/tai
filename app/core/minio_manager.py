@@ -1,7 +1,9 @@
+import os
 import tempfile
 import uuid
 from datetime import timedelta
 from pathlib import Path
+from typing import BinaryIO, Optional
 
 from minio import Minio
 from fastapi import UploadFile
@@ -33,6 +35,18 @@ class MinioManager:
             self.bucket_name,
             object_name,
             expires=timedelta(hours=expires_hours)
+        )
+
+    def upload(self, file: BinaryIO, object_name: str, bucket_name: Optional[str] = None):
+        """上传文件并返回对象名称"""
+        length = os.fstat(file.fileno()).st_size
+
+        return self.client.put_object(
+            bucket_name=bucket_name or self.bucket_name,
+            object_name=object_name,
+            data=file,
+            length=length,
+            content_type="application/octet-stream"
         )
 
     async def upload_file(self, file: UploadFile) -> str:
