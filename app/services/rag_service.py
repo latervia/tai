@@ -48,8 +48,7 @@ class RagService:
             return self.db.execute(select(DocumentModel)).scalars().all()
 
     async def doc_upload(self, file: UploadFile):
-        # todo 开一个线程去处理
-        file_name = await self.minio.upload_file(file)
+        file_name = await self.minio.upload_file(file) # todo 添加一个回调任务调用doc_convertor
         logger.info(f"文件上传成功，文件名：{file_name}")
         # 存储到数据库
         self.db.add(DocumentModel(file_name=str(file_name)))

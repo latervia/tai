@@ -1,5 +1,8 @@
+import tempfile
 import uuid
 from datetime import timedelta
+from pathlib import Path
+
 from minio import Minio
 from fastapi import UploadFile
 
@@ -23,6 +26,14 @@ class MinioManager:
         """内部方法：确保桶存在"""
         if not self.client.bucket_exists(self.bucket_name):
             self.client.make_bucket(self.bucket_name)
+
+    def get_presigned_url(self, object_name: str, expires_hours=1):
+        return self.client.get_presigned_url(
+            "POST",
+            self.bucket_name,
+            object_name,
+            expires=timedelta(hours=expires_hours)
+        )
 
     async def upload_file(self, file: UploadFile) -> str:
         """上传文件并返回对象名称"""
@@ -50,6 +61,45 @@ class MinioManager:
             object_name,
             expires=timedelta(hours=expires_hours)
         )
+
+    def download_to_temp(
+            self,
+            object_name: str,
+            bucket_name: str = None
+    ) -> str:
+        """
+        下载文件到临时目录
+        :param object_name: 对象名称
+        :param bucket_name: 桶名称
+        :return: 临时文件路径
+        """
+
+        bucket_name = bucket_name or self.bucket_name
+
+        suffix = Path(object_name).suffix
+
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=suffix,
+        )
+
+        response = self.client.get_object(
+            bucket_name,
+            object_name,
+        )
+
+        try:
+
+            for data in response.stream(1024 * 1024):
+                temp_file.write(data)
+
+        finally:
+
+            response.close()
+            response.release_conn()
+            temp_file.close()
+
+        return temp_file.name
 
 
 # 实例化单例

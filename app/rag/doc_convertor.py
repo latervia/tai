@@ -1,46 +1,59 @@
-# 文档提取主流程: Docling(Document AST) => VLM(Markdown)
-import io
-import json
-import base64
-from pathlib import Path
-from typing import List, Dict, Any
+"""
+文档提取主流程: Docling(Document AST) => VLM(Markdown)
+
+bucket-name (如: rag-data)
+└── documents/
+    └── {doc_id}/
+        ├── original.pdf          # 原始文件备份（可选）
+        ├── content.md             # 解析后的 Markdown
+        ├── metadata.json          # 关键元数据（页数、作者、时间等）
+        └── assets/                # 存放该 PDF 提取出的所有图片
+            ├── img_p1_1.png       # 命名建议：页码_序号
+            ├── img_p5_1.jpg
+            └── ...
+
+ai-knowledge-base/doc-id/original.pdf
+ai-knowledge-base/doc-id/content.md
+ai-knowledge-base/doc-id/metadata.json
+ai-knowledge-base/doc-id/assets/img_p1_1.png
+
+"""
+import inspect
+from typing import Dict, Any
 
 import fitz
-from PIL import Image
 import ollama
-
+from PIL import Image
 from docling.document_converter import DocumentConverter
+
+from app.core.minio_manager import MinioManager
+
+
+class RagDocLayout:
+    FILE_ORIGINAL = "original.pdf"  # 原始文件
+    FILE_CONTENT = "content.md"  # 解析后的Markdown
+    FILE_METADATA = "metadata.json"  # 元数据
+
+    DIR_ASSETS = "assets"  # 存放图片
 
 
 class DocConvertor:
 
-    def __init__(
-            self,
-            model_name: str = "qwen3-vl",
-            output_dir: str = "./output",
-    ):
-        self.model_name = model_name
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True, parents=True)
-
+    def __init__(self, minio: MinioManager):
         self.converter = DocumentConverter()
+        self.minio = minio
 
-    # =========================================================
-    # Public
-    # =========================================================
+    def convert_pdf(self, doc_id: str) -> Dict[str, Any]:
 
-    def convert_pdf(self, pdf_path: str) -> Dict[str, Any]:
-        """
-        主入口
-        """
+        original_name = doc_id + "/" + RagDocLayout.FILE_ORIGINAL
 
-        pdf_path = Path(pdf_path)
+        temp_path = self.minio.download_to_temp(original_name)
 
-        # 1. Docling解析
-        result = self.converter.convert(str(pdf_path))
+        # 1.Docling解析
+        result = self.converter.convert(temp_path)
 
-        # 2. 打开PDF
-        pdf_doc = fitz.open(str(pdf_path))
+        # 2.打开PDF
+        pdf_doc = fitz.open(temp_path)
 
         # 3. markdown结果
         markdown_parts = []
@@ -50,6 +63,7 @@ class DocConvertor:
 
             try:
                 processed = self._process_item(
+                    doc_id=doc_id,
                     item=item,
                     pdf_doc=pdf_doc,
                 )
@@ -62,6 +76,8 @@ class DocConvertor:
 
         final_markdown = "\n\n".join(markdown_parts)
 
+        # todo 存储markdown 观测解析结果 减少重复解析
+
         return {
             "markdown": final_markdown
         }
@@ -70,11 +86,7 @@ class DocConvertor:
     # Item Process
     # =========================================================
 
-    def _process_item(
-            self,
-            item,
-            pdf_doc,
-    ) -> str:
+    def _process_item(self, doc_id, item, pdf_doc) -> str:
 
         label = getattr(item, "label", "")
 
@@ -91,17 +103,13 @@ class DocConvertor:
 
         # 表格
         elif label == "table":
-            return self._process_table(item, pdf_doc)
+            return self._process_table(doc_id, item, pdf_doc)
 
         # 图片 / figure
         elif label in ["picture", "figure", "image"]:
-            return self._process_figure(item, pdf_doc)
+            return self._process_figure(doc_id, item, pdf_doc)
 
         return ""
-
-    # =========================================================
-    # Text
-    # =========================================================
 
     def _extract_text(self, item) -> str:
 
@@ -112,30 +120,26 @@ class DocConvertor:
 
         return text.strip()
 
-    # =========================================================
-    # Table
-    # =========================================================
+    def _process_table(self, doc_id, item, pdf_doc) -> str:
 
-    def _process_table(self, item, pdf_doc) -> str:
-
-        image = self._crop_item_image(item, pdf_doc)
+        image = self._crop_item_image(doc_id, item, pdf_doc)
 
         if image is None:
             return ""
 
         image_path = self._save_temp_image(image)
 
-        prompt = """
-你是专业文档解析助手。
+        prompt = inspect.cleandoc("""
+            你是专业文档解析助手。
 
-请完成：
-
-1. 提取表格全部内容
-2. 恢复正确行列关系
-3. 使用Markdown表格输出
-4. 不要遗漏表头
-5. 不要编造数据
-"""
+            请完成：
+            
+            1. 提取表格全部内容
+            2. 恢复正确行列关系
+            3. 使用Markdown表格输出
+            4. 不要遗漏表头
+            5. 不要编造数据
+        """)
 
         result = self._vl_inference(
             image_path=image_path,
@@ -144,30 +148,26 @@ class DocConvertor:
 
         return result
 
-    # =========================================================
-    # Figure
-    # =========================================================
+    def _process_figure(self, doc_id, item, pdf_doc) -> str:
 
-    def _process_figure(self, item, pdf_doc) -> str:
-
-        image = self._crop_item_image(item, pdf_doc)
+        image = self._crop_item_image(doc_id, item, pdf_doc)
 
         if image is None:
             return ""
 
         image_path = self._save_temp_image(image)
 
-        prompt = """
-请分析这张文档图片。
-
-要求：
-
-1. 描述图片内容
-2. 如果是流程图，描述流程
-3. 如果是架构图，描述系统关系
-4. 使用Markdown输出
-5. 简洁准确
-"""
+        prompt = inspect.cleandoc("""
+            请分析这张文档图片。
+            
+            要求：
+            
+            1. 描述图片内容
+            2. 如果是流程图，描述流程
+            3. 如果是架构图，描述系统关系
+            4. 使用Markdown输出
+            5. 简洁准确
+        """)
 
         result = self._vl_inference(
             image_path=image_path,
@@ -176,11 +176,13 @@ class DocConvertor:
 
         return f"\n[FIGURE]\n{result}\n"
 
-    # =========================================================
-    # Crop
-    # =========================================================
-
-    def _crop_item_image(self, item, pdf_doc):
+    def _crop_item_image(self, doc_id, item, pdf_doc):
+        """
+        根据item的prov信息，从pdf_doc中裁剪出item的图片
+        :param item:
+        :param pdf_doc:
+        :return:
+        """
 
         prov = getattr(item, "prov", None)
 
@@ -208,9 +210,12 @@ class DocConvertor:
 
             image = Image.frombytes(
                 "RGB",
-                [pix.width, pix.height],
+                (pix.width, pix.height),
                 pix.samples,
             )
+
+            # TODO 存储到Minio
+            image_name = f"{doc_id}/assets/img_p{page_no + 1}_{item.id}.png"
 
             return image
 
@@ -218,15 +223,17 @@ class DocConvertor:
             print(f"[ERROR] crop failed: {e}")
             return None
 
-    # =========================================================
-    # VL Inference
-    # =========================================================
-
     def _vl_inference(
             self,
             image_path: str,
             prompt: str,
     ) -> str:
+        """
+        使用 VLM 进行视觉语言推理
+        :param image_path: 图片路径
+        :param prompt: 提示语
+        :return: 推理结果
+        """
 
         response = ollama.chat(
             model=self.model_name,
@@ -241,10 +248,6 @@ class DocConvertor:
 
         return response["message"]["content"]
 
-    # =========================================================
-    # Utils
-    # =========================================================
-
     def _save_temp_image(self, image: Image.Image) -> str:
 
         temp_path = self.output_dir / "temp_crop.png"
@@ -252,13 +255,3 @@ class DocConvertor:
         image.save(temp_path)
 
         return str(temp_path)
-
-
-if __name__ == "__main__":
-    converter = DocConvertor(
-        model_name="qwen3-vl"
-    )
-
-    result = converter.convert_pdf("test.pdf")
-
-    print(result["markdown"])
