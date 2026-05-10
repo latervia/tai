@@ -65,3 +65,11 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"error": str(exc)}
     )
+
+
+if __name__ == '__main__':
+    import uvicorn
+
+    # 这里开启 reload=True 可能会导致部分调试器二次进入断点，
+    # 调试复杂问题时建议设为 False
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

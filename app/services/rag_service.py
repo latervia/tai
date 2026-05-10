@@ -1,13 +1,15 @@
 from uuid import UUID
 
-from fastapi import Depends, UploadFile
+from fastapi import Depends, UploadFile, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from uuid6 import uuid7
 
 from app.core.logger import logger
 from app.core.minio_manager import MinioManager, get_minio_manager
 from app.core.postgre_manager import get_db
 from app.models.postgre_models import KBModel, DocumentModel
+from app.rag.parser import Parser, DocLayout
 from app.schemas.rag import KBCreateReq
 
 
@@ -16,6 +18,7 @@ class RagService:
     def __init__(self, db: Session, minio: MinioManager):
         self.db = db
         self.minio = minio
+        self.parser = Parser(minio)
 
     def create(self, req: KBCreateReq) -> KBModel:
         existing = self.db.execute(select(KBModel.name == req.name)).scalar_one_or_none()
@@ -41,19 +44,29 @@ class RagService:
         self.db.execute(select(KBModel).where(KBModel.id == kb_id))
         self.db.commit()
 
-    def doc_list(self, kb_id: UUID):
+    def doc_list(self, kb_id: UUID | None):
         if not kb_id:
             return self.db.execute(select(DocumentModel)).scalars().all()
         else:
             return self.db.execute(select(DocumentModel)).scalars().all()
 
-    async def doc_upload(self, file: UploadFile):
-        file_name = await self.minio.upload_file(file) # todo 添加一个回调任务调用doc_convertor
-        logger.info(f"文件上传成功，文件名：{file_name}")
+    async def doc_upload(self, file: UploadFile, bg_tasks: BackgroundTasks):
+
+        doc_id = str(uuid7())
+        doc_name = f"{doc_id}/{DocLayout.FILE_ORIGINAL}"
+
+        self.minio.upload(file.file, object_name=doc_name)  # todo 添加一个回调任务调用doc_convertor
+        logger.info("文件上传成功")
         # 存储到数据库
-        self.db.add(DocumentModel(file_name=str(file_name)))
+        self.db.add(DocumentModel(file_name=str(doc_id)))
         self.db.commit()
 
+        # 开启后台线程调用文档解析
+        bg_tasks.add_task(self.parser.parse_pdf, doc_id)
 
-def get_rag_service(db: Session = Depends(get_db), minio: MinioManager = Depends(get_minio_manager)):
+
+def get_rag_service(
+        db: Session = Depends(get_db),
+        minio: MinioManager = Depends(get_minio_manager)
+) -> RagService:
     return RagService(db, minio)

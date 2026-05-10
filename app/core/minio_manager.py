@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 import uuid
@@ -39,7 +40,17 @@ class MinioManager:
 
     def upload(self, file: BinaryIO, object_name: str, bucket_name: Optional[str] = None):
         """上传文件并返回对象名称"""
-        length = os.fstat(file.fileno()).st_size
+        if isinstance(file, io.BytesIO):
+            length = file.getbuffer().nbytes
+        else:
+            # 针对普通文件或其他流，回退到 fstat 或 seek/tell
+            try:
+                length = os.fstat(file.fileno()).st_size
+            except (io.UnsupportedOperation, AttributeError):
+                current_pos = file.tell()
+                file.seek(0, os.SEEK_END)
+                length = file.tell()
+                file.seek(current_pos)
 
         return self.client.put_object(
             bucket_name=bucket_name or self.bucket_name,

@@ -8,6 +8,7 @@ from PIL import Image
 from docling.document_converter import DocumentConverter
 
 from app.core.llm import ollama
+from app.core.logger import logger
 from app.core.minio_manager import MinioManager
 
 
@@ -44,6 +45,8 @@ class Parser:
     def parse_pdf(self, doc_id: str) -> Dict[str, Any]:
         """将PDF文档转换为Markdown格式 并存储到minio"""
 
+        logger.info(f"解析PDF: {doc_id}")
+
         original_name = doc_id + "/" + DocLayout.FILE_ORIGINAL
 
         temp_path = self.minio.download_to_temp(original_name)
@@ -57,6 +60,8 @@ class Parser:
         # 3. markdown结果
         markdown_parts = []
 
+        logger.info("遍历处理Docling元素")
+
         # 4. 遍历文档元素
         for item in result.document.iterate_items():
 
@@ -67,16 +72,36 @@ class Parser:
                     pdf_doc=pdf_doc,
                 )
 
+                print(f"[INFO] Processed: {processed}")
+
                 if processed:
                     markdown_parts.append(processed)
 
             except Exception as e:
                 print(f"[ERROR] item process failed: {e}")
 
-        final_markdown = "\n\n".join(markdown_parts)
 
         # 存储markdown 观测解析结果 + 减少重复解析
-        self.minio.upload(io.BytesIO(final_markdown.encode("utf-8")), f"{doc_id}/{DocLayout.FILE_CONTENT}")
+        final_markdown = "\n\n".join(markdown_parts)
+
+        if not final_markdown.strip():
+            print("[WARNING] No content parsed, skipping upload.")
+        else:
+            # 1. 先进行编码转换
+            content_bytes = final_markdown.encode("utf-8")
+
+            # 2. 创建流
+            data_stream = io.BytesIO(content_bytes)
+
+            # 3. 构造路径 (确保 DocLayout.FILE_CONTENT 是字符串)
+            object_path = f"{doc_id}/{DocLayout.FILE_CONTENT}"
+
+            try:
+                # 确保你的 upload 函数已经兼容了 BytesIO (使用之前给你的修改版本)
+                self.minio.upload(data_stream, object_path)
+                print(f"[INFO] Successfully uploaded {len(content_bytes)} bytes to {object_path}")
+            except Exception as e:
+                print(f"[ERROR] MinIO upload failed: {e}")
 
         return {
             "markdown": final_markdown,
@@ -85,7 +110,9 @@ class Parser:
     def _process_item(self, doc_id, item, pdf_doc) -> str:
         """处理Docling解析输出的文档元素"""
 
-        label = getattr(item, "label", "")
+        label = getattr(item[0], "label", "")
+
+        logger.info(f"Docling 元素: {label}")
 
         # 普通文本
         if label in [
@@ -111,7 +138,7 @@ class Parser:
     def _extract_text(self, item) -> str:
         """从文档元素中提取文本内容"""
 
-        text = getattr(item, "text", "")
+        text = getattr(item[0], 'text', getattr(item[0], 'orig', ""))
 
         if not text:
             return ""
@@ -120,6 +147,7 @@ class Parser:
 
     def _process_table(self, doc_id, item, pdf_doc) -> str:
         """处理文档中的表格元素"""
+        logger.info("处理表格元素")
 
         image_base64 = self._crop_item_image(doc_id, item, pdf_doc)
 
@@ -147,9 +175,12 @@ class Parser:
     def _process_figure(self, doc_id, item, pdf_doc) -> str:
         """处理文档中的图片元素"""
 
+        logger.info("处理图片元素")
+
         image_base64 = self._crop_item_image(doc_id, item, pdf_doc)
 
         if image_base64 is None:
+            logger.info("图片为空")
             return ""
 
         prompt = inspect.cleandoc("""
@@ -174,6 +205,7 @@ class Parser:
             2. 将图片存储到minio
             3. 返回图片Base64编码
         """
+        logger.info("截图")
 
         prov = getattr(item, "prov", None)
 
@@ -213,6 +245,7 @@ class Parser:
 
             # 存储到Minio
             image_name = f"{doc_id}/{DocLayout.DIR_ASSETS}/img_p{page_no + 1}_{item.id}.png"
+            logger.info(f"[IMAGE] image_name: {image_name}")
             self.minio.upload(buffer, image_name)
 
             return image_base64
@@ -223,7 +256,7 @@ class Parser:
 
     def _vl_inference(self, image_base64: str, prompt: str) -> str:
         """使用 VLM 进行视觉语言推理 获得图片描述"""
-
+        logger.info("调用VLM")
         message = {
             "role": "user",
             "content": [
@@ -237,5 +270,6 @@ class Parser:
         }
 
         response = ollama().invoke(message)
+        print(f"VLM response: {response}")
 
         return response["message"]["content"]

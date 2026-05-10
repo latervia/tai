@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, UploadFile, BackgroundTasks
 
 from app.api.rest.result import Result
 from app.models.postgre_models import DocumentModel
@@ -36,8 +36,12 @@ def knowledge_base_doc_list(kb_id: UUID = None, service: RagService = Depends(ge
 
 
 @router.post("/doc/upload", description="上传文档")
-async def knowledge_base_doc_upload(file: UploadFile, service: RagService = Depends(get_rag_service)):
-    await service.doc_upload(file)
+async def knowledge_base_doc_upload(
+        file: UploadFile,
+        bg_tasks: BackgroundTasks,
+        service: RagService = Depends(get_rag_service)
+):
+    await service.doc_upload(file, bg_tasks)
     return Result.success()
 
 
