@@ -80,7 +80,6 @@ class Parser:
             except Exception as e:
                 print(f"[ERROR] item process failed: {e}")
 
-
         # 存储markdown 观测解析结果 + 减少重复解析
         final_markdown = "\n\n".join(markdown_parts)
 
@@ -200,31 +199,30 @@ class Parser:
         return f"\n[FIGURE]\n{result}\n"
 
     def _crop_item_image(self, doc_id, item, pdf_doc):
-        """
-            1. 根据item的prov信息 fitz从pdf_doc中裁剪出item的图片
-            2. 将图片存储到minio
-            3. 返回图片Base64编码
-        """
-        logger.info("截图")
 
-        prov = getattr(item, "prov", None)
+        logger.info(f"截图: {item}")
+
+        prov = getattr(item[0], "prov", None)
 
         if not prov:
             return None
 
         try:
             page_no = prov[0].page_no - 1
-
             bbox = prov[0].bbox
 
             page = pdf_doc[page_no]
 
+            page_height = page.rect.height
+
             rect = fitz.Rect(
                 bbox.l,
-                bbox.t,
+                page_height - bbox.t,
                 bbox.r,
-                bbox.b,
-            )
+                page_height - bbox.b,
+            ).normalize()
+
+            logger.info(f"crop rect: {rect}")
 
             pix = page.get_pixmap(
                 matrix=fitz.Matrix(2, 2),
@@ -233,25 +231,29 @@ class Parser:
 
             image = Image.frombytes(
                 "RGB",
-                (pix.width, pix.height),
+                [pix.width, pix.height],
                 pix.samples,
             )
 
             buffer = io.BytesIO()
-            image.save(buffer, format="png")
+            image.save(buffer, format="PNG")
             buffer.seek(0)
 
-            image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            image_base64 = base64.b64encode(
+                buffer.getvalue()
+            ).decode("utf-8")
 
-            # 存储到Minio
-            image_name = f"{doc_id}/{DocLayout.DIR_ASSETS}/img_p{page_no + 1}_{item.id}.png"
-            logger.info(f"[IMAGE] image_name: {image_name}")
+            image_name = (
+                f"{doc_id}/{DocLayout.DIR_ASSETS}/"
+                f"img_p{page_no + 1}.png"
+            )
+
             self.minio.upload(buffer, image_name)
 
             return image_base64
 
         except Exception as e:
-            print(f"[ERROR] crop failed: {e}")
+            logger.exception(e)
             return None
 
     def _vl_inference(self, image_base64: str, prompt: str) -> str:
