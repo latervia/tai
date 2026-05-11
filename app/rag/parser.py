@@ -259,7 +259,7 @@ class Parser:
     def _vl_inference(self, image_base64: str, prompt: str) -> str:
         """使用 VLM 进行视觉语言推理 获得图片描述"""
         logger.info("调用VLM")
-        message = {
+        message = [{
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
@@ -269,7 +269,7 @@ class Parser:
                     "mime_type": "image/jpeg",
                 },
             ]
-        }
+        }]
 
         response = ollama().invoke(message)
         print(f"VLM response: {response}")

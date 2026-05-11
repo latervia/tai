@@ -7,8 +7,8 @@ class BaseConfig(BaseSettings):
     """基础通用配置域"""
 
     model_config = SettingsConfigDict(
-        # env_file=".env.tailscale",
-        env_file=".env",
+        env_file=".env.tailscale",
+        # env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True

@@ -21,5 +21,6 @@ def qwen(model: str = "qwen3.5-35b-a3b", temperature: float = 0.7) -> BaseChatMo
 @lru_cache(maxsize=4)
 def ollama() -> BaseChatModel:
     return ChatOllama(
-        model="qwen3-vl:2b"
+        model="qwen3-vl:2b",
+        base_url=settings.ollama.base_url,
     )
