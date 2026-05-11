@@ -11,9 +11,11 @@ from fastapi import UploadFile
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.core.storage.storage import BaseStorage
 
 
-class MinioManager:
+class MinioStorage(BaseStorage):
+
     def __init__(self, endpoint, access_key, secret_key, secure=False):
         # 初始化客户端（全局只需一次）
         self.client = Minio(
@@ -30,16 +32,7 @@ class MinioManager:
         if not self.client.bucket_exists(self.bucket_name):
             self.client.make_bucket(self.bucket_name)
 
-    def get_presigned_url(self, object_name: str, expires_hours=1):
-        return self.client.get_presigned_url(
-            "POST",
-            self.bucket_name,
-            object_name,
-            expires=timedelta(hours=expires_hours)
-        )
-
     def upload(self, file: BinaryIO, object_name: str, bucket_name: Optional[str] = None):
-        """上传文件并返回对象名称"""
         if isinstance(file, io.BytesIO):
             length = file.getbuffer().nbytes
         else:
@@ -60,44 +53,15 @@ class MinioManager:
             content_type="application/octet-stream"
         )
 
-    async def upload_file(self, file: UploadFile) -> str:
-        """上传文件并返回对象名称"""
-        file_extension = file.filename.split(".")[-1] if "." in file.filename else ""
-        object_name = f"{uuid.uuid4()}.{file_extension}"
+    def get_url(self, object_name, bucket_name: Optional[str] = None) -> str:
+        bn = bucket_name or self.bucket_name
+        return self.client.presigned_get_object(bn, object_name)
 
-        # 执行上传
-        minio_res = self.client.put_object(
-            bucket_name=self.bucket_name,
-            object_name=object_name,
-            data=file.file,
-            length=file.size,
-            content_type=file.content_type
-        )
-
-        logger.info(f"Uploaded {object_name} successfully. {minio_res}")
-
-        return object_name
-
-    def get_url(self, object_name: str, expires_hours=1):
-        """获取临时预览/下载地址"""
-        return self.client.get_presigned_url(
-            "GET",
-            self.bucket_name,
-            object_name,
-            expires=timedelta(hours=expires_hours)
-        )
-
-    def download_to_temp(
+    def download_local(
             self,
             object_name: str,
             bucket_name: str = None
     ) -> str:
-        """
-        下载文件到临时目录
-        :param object_name: 对象名称
-        :param bucket_name: 桶名称
-        :return: 临时文件路径
-        """
 
         bucket_name = bucket_name or self.bucket_name
 
@@ -128,7 +92,7 @@ class MinioManager:
 
 
 # 实例化单例
-minio_manager = MinioManager(
+minio_storage = MinioStorage(
     endpoint=settings.minio.endpoint,
     access_key=settings.minio.access_id,
     secret_key=settings.minio.access_secret,
@@ -136,5 +100,5 @@ minio_manager = MinioManager(
 
 
 # 配合FastAPI依赖注入
-def get_minio_manager():
-    return minio_manager
+def get_minio_storage():
+    return minio_storage

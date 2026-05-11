@@ -9,7 +9,7 @@ from docling.document_converter import DocumentConverter
 
 from app.core.llm import ollama
 from app.core.logger import logger
-from app.core.minio_manager import MinioManager
+from app.core.storage.minio_storage import MinioStorage
 
 
 class DocLayout:
@@ -33,12 +33,26 @@ bucket-name (如: rag-data)
             ├── img_p1_1.png       # 命名建议：页码_序号
             ├── img_p5_1.jpg
             └── ...
+
+Loader
+  ↓
+Parser
+  ↓
+Structured Document
+  ↓
+Document Classifier
+  ↓
+Chunk Strategy Selector
+  ↓
+Chunk Generator
+  ↓
+Embedding
 """
 
 
 class Parser:
 
-    def __init__(self, minio: MinioManager):
+    def __init__(self, minio: MinioStorage):
         self.converter = DocumentConverter()
         self.minio = minio
 
@@ -49,10 +63,19 @@ class Parser:
 
         original_name = doc_id + "/" + DocLayout.FILE_ORIGINAL
 
-        temp_path = self.minio.download_to_temp(original_name)
+        temp_path = self.minio.download_local(original_name)
 
         # 1.Docling解析
         result = self.converter.convert(temp_path)
+
+        # 直接存储结果
+        html = result.document.export_to_html()
+        obj_name = f"{doc_id}/temp.html"
+        self.minio.upload(io.BytesIO(html.encode("utf-8")), obj_name)
+
+        return {
+            "html": "html",
+        }
 
         # 2.打开PDF
         pdf_doc = fitz.open(temp_path)
@@ -274,4 +297,4 @@ class Parser:
         response = ollama().invoke(message)
         print(f"VLM response: {response}")
 
-        return response["message"]["content"]
+        return response.content

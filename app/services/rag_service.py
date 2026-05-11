@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
 from app.core.logger import logger
-from app.core.minio_manager import MinioManager, get_minio_manager
+from app.core.storage.minio_storage import MinioStorage, get_minio_storage
 from app.core.postgre_manager import get_db
 from app.models.postgre_models import KBModel, DocumentModel
 from app.rag.parser import Parser, DocLayout
@@ -15,7 +15,7 @@ from app.schemas.rag import KBCreateReq
 
 class RagService:
 
-    def __init__(self, db: Session, minio: MinioManager):
+    def __init__(self, db: Session, minio: MinioStorage):
         self.db = db
         self.minio = minio
         self.parser = Parser(minio)
@@ -67,6 +67,6 @@ class RagService:
 
 def get_rag_service(
         db: Session = Depends(get_db),
-        minio: MinioManager = Depends(get_minio_manager)
+        minio: MinioStorage = Depends(get_minio_storage)
 ) -> RagService:
     return RagService(db, minio)
