@@ -6,6 +6,7 @@ from typing import Dict, Any
 import fitz
 from PIL import Image
 from docling.document_converter import DocumentConverter
+from docling_core.types.doc import ImageRefMode
 
 from app.core.llm import ollama
 from app.core.logger import logger
@@ -13,7 +14,7 @@ from app.core.storage.minio_storage import MinioStorage
 
 
 class DocLayout:
-    FILE_ORIGINAL = "original.pdf"  # 原始文件
+    FILE_ORIGINAL = "source.pdf"  # 原始文件
     FILE_CONTENT = "content.md"  # 解析后的Markdown
     FILE_METADATA = "metadata.json"  # 元数据
 
@@ -69,13 +70,13 @@ class Parser:
         result = self.converter.convert(temp_path)
 
         # 直接存储结果
-        html = result.document.export_to_html()
-        obj_name = f"{doc_id}/temp.html"
-        self.minio.upload(io.BytesIO(html.encode("utf-8")), obj_name)
+        # html = result.document.export_to_html()
+        # obj_name = f"{doc_id}/temp.html"
+        # self.minio.upload(io.BytesIO(html.encode("utf-8")), obj_name)
 
-        return {
-            "html": "html",
-        }
+        # return {
+        #     "html": "html",
+        # }
 
         # 2.打开PDF
         pdf_doc = fitz.open(temp_path)

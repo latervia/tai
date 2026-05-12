@@ -9,8 +9,10 @@ from app.core.logger import logger
 from app.core.storage.minio_storage import MinioStorage, get_minio_storage
 from app.core.postgre_manager import get_db
 from app.models.postgre_models import KBModel, DocumentModel
+from app.rag.convertors.fitz_convertor import FitzConvertor
 from app.rag.parser import Parser, DocLayout
 from app.schemas.rag import KBCreateReq
+from app.rag.convertors.base import BaseConvertor
 
 
 class RagService:
@@ -19,6 +21,7 @@ class RagService:
         self.db = db
         self.minio = minio
         self.parser = Parser(minio)
+        self.convertor: BaseConvertor = FitzConvertor()
 
     def create(self, req: KBCreateReq) -> KBModel:
         existing = self.db.execute(select(KBModel.name == req.name)).scalar_one_or_none()
@@ -54,6 +57,7 @@ class RagService:
 
         doc_id = str(uuid7())
         doc_name = f"{doc_id}/{DocLayout.FILE_ORIGINAL}"
+        print(f"上传文件名称: {doc_name}")
 
         self.minio.upload(file.file, object_name=doc_name)  # todo 添加一个回调任务调用doc_convertor
         logger.info("文件上传成功")
@@ -62,7 +66,7 @@ class RagService:
         self.db.commit()
 
         # 开启后台线程调用文档解析
-        bg_tasks.add_task(self.parser.parse_pdf, doc_id)
+        bg_tasks.add_task(self.convertor.convert, doc_id)
 
 
 def get_rag_service(

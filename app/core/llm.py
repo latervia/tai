@@ -8,7 +8,7 @@ from app.core.config import settings
 
 
 @lru_cache(maxsize=4)
-def qwen(model: str = "qwen3.5-35b-a3b", temperature: float = 0.7) -> BaseChatModel | _ConfigurableModel:
+def qwen(model: str = "qwen3.6-plus", temperature: float = 0.7) -> BaseChatModel | _ConfigurableModel:
     return init_chat_model(
         model=model,
         temperature=temperature,
