@@ -13,4 +13,6 @@ def build_pipeline(doc_id):
     chunker = LlmChunker()
     chunks = chunker.chunk_with_llm(md)
 
-    print(chunks)
+    # TODO 3. 向量化
+    for chunk in chunks:
+        pass
