@@ -23,7 +23,7 @@ class FitzConvertor(BaseConvertor):
             doc_id: str,
             source_type: Annotated[Literal["pdf", "docx"], "源文件格式"] = "pdf",
             target_type: Annotated[Literal["txt", "html", "md"], "目标文件格式"] = "md"
-    ):
+    ) -> str:
         source_name = self.get_source_name(doc_id, source_type)
 
         print(f"下载文件名称: {source_name}")
@@ -77,6 +77,8 @@ class FitzConvertor(BaseConvertor):
         doc_md = self.llm_format(doc_md)
 
         self.storage.upload(io.BytesIO(doc_md.encode("utf-8")), target_name)
+
+        return doc_md
 
     def _get_images(self, text):
         images = re.findall(self.image_pattern, text)

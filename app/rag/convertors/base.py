@@ -18,7 +18,7 @@ class BaseConvertor(ABC):
             doc_id: str,
             source_type: Annotated[Literal["pdf", "docx"], "源文件格式"] = "pdf",
             target_type: Annotated[Literal["txt", "html", "md"], "目标文件格式"] = "md"
-    ):
+    ) -> str:
         pass
 
     @classmethod
@@ -56,7 +56,6 @@ class BaseConvertor(ABC):
         }]
         response = self.llm.invoke(message)
         return response.content
-
 
     def get_image_des(self, image_base64: str):
         prompt = inspect.cleandoc("""

@@ -11,6 +11,7 @@ from app.core.postgre_manager import get_db
 from app.models.postgre_models import KBModel, DocumentModel
 from app.rag.convertors.fitz_convertor import FitzConvertor
 from app.rag.parser import Parser, DocLayout
+from app.rag.pipeline.build_pipeline import build_pipeline
 from app.schemas.rag import KBCreateReq
 from app.rag.convertors.base import BaseConvertor
 
@@ -21,7 +22,7 @@ class RagService:
         self.db = db
         self.minio = minio
         self.parser = Parser(minio)
-        self.convertor: BaseConvertor = FitzConvertor()
+        # self.convertor: BaseConvertor = FitzConvertor()
 
     def create(self, req: KBCreateReq) -> KBModel:
         existing = self.db.execute(select(KBModel.name == req.name)).scalar_one_or_none()
@@ -66,7 +67,8 @@ class RagService:
         self.db.commit()
 
         # 开启后台线程调用文档解析
-        bg_tasks.add_task(self.convertor.convert, doc_id)
+        # bg_tasks.add_task(self.convertor.convert, doc_id)
+        bg_tasks.add_task(build_pipeline, doc_id)
 
 
 def get_rag_service(
