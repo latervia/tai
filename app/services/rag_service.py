@@ -9,11 +9,11 @@ from app.core.logger import logger
 from app.core.storage.minio_storage import MinioStorage, get_minio_storage
 from app.core.postgre_manager import get_db
 from app.models.postgre_models import KBModel, DocumentModel
-from app.rag.convertors.fitz_convertor import FitzConvertor
+from app.rag.convert.fitz_convertor import FitzConvertor
 from app.rag.parser import Parser, DocLayout
 from app.rag.pipeline.build_pipeline import build_pipeline
 from app.schemas.rag import KBCreateReq
-from app.rag.convertors.base import BaseConvertor
+from app.rag.convert.base import BaseConvertor
 
 
 class RagService:

@@ -8,7 +8,7 @@ import pymupdf4llm
 from app.core.logger import logger
 from app.core.storage.minio_storage import get_minio_storage
 from app.core.storage.storage import BaseStorage
-from app.rag.convertors.base import BaseConvertor
+from app.rag.convert.base import BaseConvertor
 
 
 class FitzConvertor(BaseConvertor):

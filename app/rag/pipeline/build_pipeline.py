@@ -1,5 +1,5 @@
 from app.rag.chunk.llm_chunker import LlmChunker
-from app.rag.convertors.fitz_convertor import FitzConvertor
+from app.rag.convert.fitz_convertor import FitzConvertor
 
 
 def build_pipeline(doc_id):
