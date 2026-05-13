@@ -1,16 +1,12 @@
 import io
 import os
 import tempfile
-import uuid
-from datetime import timedelta
 from pathlib import Path
 from typing import BinaryIO, Optional
 
 from minio import Minio
-from fastapi import UploadFile
 
 from app.core.config import settings
-from app.core.logger import logger
 from app.core.storage.storage import BaseStorage
 
 

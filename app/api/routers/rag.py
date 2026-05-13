@@ -4,7 +4,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, BackgroundTasks
 
 from app.api.rest.result import Result
-from app.models.postgre_models import DocumentModel
 from app.schemas.rag import KBCreateReq, KBRes, DocumentRes
 from app.services.rag_service import RagService, get_rag_service
 

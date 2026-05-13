@@ -1,6 +1,5 @@
 # 如果有 Milvus / Redis / ES 也在这里初始化
 from app.core.logger import logger
-from app.core.redis_manager import redis_client
 
 
 async def startup_event():

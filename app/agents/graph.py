@@ -1,7 +1,7 @@
-import redis.asyncio as redis  # 建议安装 redis 库: pip install redis
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import StateGraph
+
 from app.agents.nodes import chat_node
 from app.agents.state import State
 from app.core.config import settings

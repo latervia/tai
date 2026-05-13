@@ -6,14 +6,11 @@ from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
 from app.core.logger import logger
-from app.core.storage.minio_storage import MinioStorage, get_minio_storage
 from app.core.postgre_manager import get_db
+from app.core.storage.minio_storage import MinioStorage, get_minio_storage
 from app.models.postgre_models import KBModel, DocumentModel
-from app.rag.convert.fitz_convertor import FitzConvertor
-from app.rag.parser import Parser, DocLayout
 from app.rag.pipeline.build_pipeline import build_pipeline
 from app.schemas.rag import KBCreateReq
-from app.rag.convert.base import BaseConvertor
 
 
 class RagService:
@@ -21,7 +18,7 @@ class RagService:
     def __init__(self, db: Session, minio: MinioStorage):
         self.db = db
         self.minio = minio
-        self.parser = Parser(minio)
+        # self.parser = Parser(minio)
         # self.convertor: BaseConvertor = FitzConvertor()
 
     def create(self, req: KBCreateReq) -> KBModel:
@@ -57,7 +54,7 @@ class RagService:
     async def doc_upload(self, file: UploadFile, bg_tasks: BackgroundTasks):
 
         doc_id = str(uuid7())
-        doc_name = f"{doc_id}/{DocLayout.FILE_ORIGINAL}"
+        doc_name = f"{doc_id}/original"
         print(f"上传文件名称: {doc_name}")
 
         self.minio.upload(file.file, object_name=doc_name)  # todo 添加一个回调任务调用doc_convertor
