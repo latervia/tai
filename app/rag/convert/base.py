@@ -2,7 +2,7 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import Annotated, Literal
 
-from app.core.llm import ollama, qwen
+from app.core.model import ollama, qwen
 
 
 class BaseConvertor(ABC):

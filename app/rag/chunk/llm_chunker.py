@@ -1,7 +1,7 @@
 import inspect
 import json
 
-from app.core.llm import qwen
+from app.core.model import qwen
 from app.rag.chunk.base import BaseChunker
 
 
