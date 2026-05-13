@@ -1,6 +1,6 @@
 from uuid6 import uuid7
 
-from app.agents.graph import GraphRuntime
+from app.agent.graph import GraphRuntime
 
 
 class ChatService:

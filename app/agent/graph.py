@@ -2,8 +2,8 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import StateGraph
 
-from app.agents.nodes import chat_node
-from app.agents.state import State
+from app.agent.nodes import chat_node
+from app.agent.state import State
 from app.core.config import settings
 
 
