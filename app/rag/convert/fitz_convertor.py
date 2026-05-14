@@ -1,11 +1,14 @@
 import io
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated, Literal
 
 import fitz
 import pymupdf4llm
 
 from app.core.logger import logger
+from app.core.model import ollama_vl, qwen
 from app.core.storage.minio_storage import get_minio_storage
 from app.core.storage.storage import BaseStorage
 from app.rag.convert.base import BaseConvertor
@@ -14,7 +17,7 @@ from app.rag.convert.base import BaseConvertor
 class FitzConvertor(BaseConvertor):
 
     def __init__(self):
-        super().__init__("pymupdf4llm")
+        super().__init__(way="pymupdf4llm", llm=qwen(), vlm=ollama_vl())
         self.storage: BaseStorage = get_minio_storage()
         self.image_pattern = r"\*\*==> .*? \[\d+ x \d+\] .*? <==\*\*"
 
@@ -25,61 +28,96 @@ class FitzConvertor(BaseConvertor):
             target_type: Annotated[Literal["txt", "html", "md"], "目标文件格式"] = "md"
     ) -> str:
         source_name = self.get_source_name(doc_id, source_type)
-
-        print(f"下载文件名称: {source_name}")
+        logger.info(f"开始转换文档: {source_name}")
 
         target_name = self.get_target_name(doc_id, target_type)
-
-        # file_path = self.storage.get_url(source_name)
         local_path = self.storage.download_local(source_name)
-        print(f"文件保存路径: {local_path}")
+        logger.info(f"文件已下载到: {local_path}")
 
-        doc_md = pymupdf4llm.to_markdown(
-            local_path,
-            # embed_images=True,  # 嵌入Base64图片
-            header=False,
-            footer=False,
-            dpi=300  # 提高图片清晰度
-        )
+        try:
+            doc_md = pymupdf4llm.to_markdown(
+                local_path,
+                header=False,
+                footer=False,
+                dpi=300
+            )
 
-        # 处理图片
-        images = self._get_images(doc_md)  # 占位符
+            placeholders = self._get_image_placeholders(doc_md)
+            image_items = self._process_images(doc_id, local_path, placeholders)
 
-        image_list = []  # OSS真实图片object_name
+            doc_md = self._replace_placeholders(doc_md, placeholders, image_items)
+            doc_md = self.llm_format(doc_md)
+
+            self.storage.upload(io.BytesIO(doc_md.encode("utf-8")), target_name)
+            logger.info(f"文档转换完成: {target_name}")
+            return doc_md
+
+        finally:
+            try:
+                os.unlink(local_path)
+            except OSError:
+                pass
+
+    def _get_image_placeholders(self, text: str) -> list[str]:
+        return re.findall(self.image_pattern, text)
+
+    def _process_images(
+            self,
+            doc_id: str,
+            local_path: str,
+            placeholders: list[str]
+    ) -> list[str]:
         doc = fitz.open(local_path)
-        page_count = doc.page_count
-        for page_num in range(page_count):
-            page = doc.load_page(page_num)
-            page_image_list = page.get_images(full=True)
-            for img_index, img in enumerate(page_image_list):
-                xref = img[0]
-                base64_image = doc.extract_image(xref)
-                image_bytes = base64_image["image"]
-                object_name = f"{self.get_assets_dir(doc_id)}/{page_num + 1}_{img_index + 1}.png"
-                self.storage.upload(io.BytesIO(image_bytes), object_name)
+        try:
+            page_count = doc.page_count
 
-                # markdown图片: ![替代文字](图片路径)
-                # 1.调用大模型获取图片描述文字
-                image_des = self.get_image_des(image_bytes)
-                image_item = f"![{image_des}]({object_name})"
+            tasks: list[tuple[int, int, bytes]] = []
+            for page_num in range(page_count):
+                page = doc.load_page(page_num)
+                for img_index, img in enumerate(page.get_images(full=True)):
+                    xref = img[0]
+                    image_bytes = doc.extract_image(xref)["image"]
+                    tasks.append((page_num, img_index, image_bytes))
 
-                image_list.append(image_item)
+            if not tasks:
+                return []
 
-        if len(images) != len(image_list):
-            logger.warning(f"图片数量不一致，源文件: {len(images)}，目标文件: {len(image_list)}")
+            results: list[tuple[int, str]] = []
+            with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as executor:
+                future_to_idx = {}
+                for idx, (page_num, img_index, image_bytes) in enumerate(tasks):
+                    object_name = f"{self.get_assets_dir(doc_id)}/{page_num + 1}_{img_index + 1}.png"
+                    future = executor.submit(self._process_single_image, image_bytes, object_name)
+                    future_to_idx[future] = idx
 
-        # 替换图片
-        image_num = len(images)
-        for i in range(image_num):
-            doc_md = doc_md.replace(images[i], image_list[i])
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    results.append((idx, future.result()))
 
-        # 让大模型处理误断的行
-        doc_md = self.llm_format(doc_md)
+            results.sort(key=lambda x: x[0])
+            return [item for _, item in results]
+        finally:
+            doc.close()
 
-        self.storage.upload(io.BytesIO(doc_md.encode("utf-8")), target_name)
+    def _process_single_image(self, image_bytes: bytes, object_name: str) -> str:
+        self.storage.upload(io.BytesIO(image_bytes), object_name)
+        description = self.get_image_des(image_bytes)
+        return f"![{description}]({object_name})"
 
+    def _replace_placeholders(
+            self,
+            doc_md: str,
+            placeholders: list[str],
+            image_items: list[str]
+    ) -> str:
+        if len(placeholders) != len(image_items):
+            logger.warning(
+                f"图片数量不一致: 占位符 {len(placeholders)} 个，实际处理 {len(image_items)} 个"
+            )
+            count = min(len(placeholders), len(image_items))
+            for i in range(count):
+                doc_md = doc_md.replace(placeholders[i], image_items[i])
+        else:
+            for placeholder, item in zip(placeholders, image_items):
+                doc_md = doc_md.replace(placeholder, item)
         return doc_md
-
-    def _get_images(self, text):
-        images = re.findall(self.image_pattern, text)
-        return images

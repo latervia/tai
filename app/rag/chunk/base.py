@@ -1,9 +1,10 @@
-# 知识块切分流程
 from abc import ABC, abstractmethod
+
+from app.rag.chunk.models import Chunk
 
 
 class BaseChunker(ABC):
 
     @abstractmethod
-    def chunk(self, text: str):
+    def chunk(self, text: str) -> list[Chunk]:
         pass

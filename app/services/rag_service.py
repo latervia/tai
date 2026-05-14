@@ -54,7 +54,7 @@ class RagService:
     async def doc_upload(self, file: UploadFile, bg_tasks: BackgroundTasks):
 
         doc_id = str(uuid7())
-        doc_name = f"{doc_id}/original"
+        doc_name = f"{doc_id}/source.pdf"
         print(f"上传文件名称: {doc_name}")
 
         self.minio.upload(file.file, object_name=doc_name)  # todo 添加一个回调任务调用doc_convertor

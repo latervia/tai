@@ -1,16 +1,19 @@
+import base64
 import inspect
 from abc import ABC, abstractmethod
 from typing import Annotated, Literal
 
-from app.core.model import ollama, qwen
+from langchain_core.language_models import BaseChatModel
+
+from app.core.logger import logger
 
 
 class BaseConvertor(ABC):
 
-    def __init__(self, way: str):
+    def __init__(self, way: str, llm: BaseChatModel, vlm: BaseChatModel | None = None):
         self.way = way
-        self.vlm = ollama()
-        self.llm = qwen()
+        self.llm = llm
+        self.vlm = vlm or llm
 
     @abstractmethod
     def convert(
@@ -22,24 +25,16 @@ class BaseConvertor(ABC):
         pass
 
     @classmethod
-    def get_source_name(
-            cls,
-            doc_id: str,
-            source_type: str
-    ):
+    def get_source_name(cls, doc_id: str, source_type: str) -> str:
         return f"{doc_id}/source.{source_type}"
 
-    def get_target_name(
-            self,
-            doc_id: str,
-            target_type: str
-    ):
+    def get_target_name(self, doc_id: str, target_type: str) -> str:
         return f"{doc_id}/target_by_{self.way}.{target_type}"
 
-    def get_assets_dir(self, doc_id: str, ):
+    def get_assets_dir(self, doc_id: str) -> str:
         return f"{doc_id}/assets_{self.way}"
 
-    def llm_format(self, text: str):
+    def llm_format(self, text: str) -> str:
         prompt = inspect.cleandoc("""
             请优化这段Markdown的格式，严格按照以下要求优化：
             1. 根据语义合并误断的行，包括标题和段落的误断
@@ -49,35 +44,39 @@ class BaseConvertor(ABC):
         """)
         message = [{
             "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "text", "text": text},
-            ]
+            "content": f"{prompt}\n\n{text}"
         }]
-        response = self.llm.invoke(message)
-        return response.content
+        try:
+            response = self.llm.invoke(message)
+            return response.content
+        except Exception as e:
+            logger.error(f"LLM 格式优化失败: {e}")
+            return text
 
-    def get_image_des(self, image_base64: str):
+    def get_image_des(self, image_bytes: bytes) -> str:
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         prompt = inspect.cleandoc("""
-                    请分析这张文档图片，要求：
-                    1. 描述图片内容
-                    2. 如果是流程图，描述流程
-                    3. 如果是架构图，描述系统关系
-                    4. 使用一段纯文本描述，不要换行
-                    5. 简洁准确
-                """)
-
+            请分析这张文档图片，要求：
+            1. 描述图片内容
+            2. 如果是流程图，描述流程
+            3. 如果是架构图，描述系统关系
+            4. 使用一段纯文本描述，不要换行
+            5. 简洁准确
+        """)
         message = [{
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
                 {
                     "type": "image",
-                    "base64": image_base64,
+                    "base64": image_b64,
                     "mime_type": "image/png",
                 },
             ]
         }]
-
-        response = self.vlm.invoke(message)
-        return response.content
+        try:
+            response = self.vlm.invoke(message)
+            return response.content
+        except Exception as e:
+            logger.error(f"图片描述生成失败: {e}")
+            return ""

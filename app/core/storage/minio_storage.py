@@ -87,14 +87,15 @@ class MinioStorage(BaseStorage):
         return temp_file.name
 
 
-# 实例化单例
-minio_storage = MinioStorage(
-    endpoint=settings.minio.endpoint,
-    access_key=settings.minio.access_id,
-    secret_key=settings.minio.access_secret,
-)
+_minio_storage: MinioStorage | None = None
 
 
-# 配合FastAPI依赖注入
-def get_minio_storage():
-    return minio_storage
+def get_minio_storage() -> MinioStorage:
+    global _minio_storage
+    if _minio_storage is None:
+        _minio_storage = MinioStorage(
+            endpoint=settings.minio.endpoint,
+            access_key=settings.minio.access_id,
+            secret_key=settings.minio.access_secret,
+        )
+    return _minio_storage

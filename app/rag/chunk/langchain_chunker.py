@@ -1,12 +1,10 @@
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 from app.rag.chunk.base import BaseChunker
+from app.rag.chunk.models import Chunk
 
 
 class LangchainChunker(BaseChunker):
-    """
-    Langchain chunker
-    """
     HEADER_TO_SPLIT_ON = [
         ("#", "Header 1"),
         ("##", "Header 2"),
@@ -18,10 +16,18 @@ class LangchainChunker(BaseChunker):
 
     def __init__(self):
         super().__init__()
-        self.splitter = MarkdownHeaderTextSplitter(self.HEADER_TO_SPLIT_ON)
+        self.splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=self.HEADER_TO_SPLIT_ON,
+            strip_headers=False,
+        )
 
-    def chunk(self, text: str):
+    def chunk(self, text: str) -> list[Chunk]:
         chunks = self.splitter.split_text(text)
-
-        for chunk in chunks:
-            print(chunk.metadata, chunk.page_content)
+        return [
+            Chunk(
+                content=chunk.page_content,
+                chunk_index=i,
+                metadata=chunk.metadata,
+            )
+            for i, chunk in enumerate(chunks)
+        ]

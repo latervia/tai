@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BaseConfig(BaseSettings):
@@ -28,7 +29,9 @@ class OllamaSettings(BaseConfig):
     """Ollama配置域"""
 
     model: str = Field(alias="OLLAMA_MODEL")
+    vl_model: str = Field(alias="OLLAMA_VL_MODEL")
     embedding_model: str = Field(alias="OLLAMA_EMBEDDING_MODEL")
+    api_key: str = Field(alias="OLLAMA_API_KEY")
     base_url: str = Field(alias="OLLAMA_BASE_URL")
     temperature: float = Field(alias="OLLAMA_TEMPERATURE")
 
@@ -42,6 +45,7 @@ class MilvusSettings(BaseConfig):
     password: str = Field(alias="MILVUS_PASSWORD")
     database: str = Field(alias="MILVUS_DATABASE")
     collection: str = Field(alias="MILVUS_COLLECTION")
+    dim: int = Field(default=1024, alias="MILVUS_DIM")
 
 
 class PostgresSettings(BaseConfig):
