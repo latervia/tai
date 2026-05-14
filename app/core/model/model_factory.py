@@ -1,6 +1,6 @@
+import posixpath
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import Dict, Any, Optional
 
 from langchain_openai import ChatOpenAI
@@ -29,7 +29,7 @@ class ModelFactory:
             },
             ModelProvider.OLLAMA: {
                 "api_key": settings.ollama.api_key,
-                "base_url": str(Path(settings.ollama.base_url, "v1")),
+                "base_url": posixpath.join(settings.ollama.base_url, "v1"),
                 "model": settings.ollama.model,
             }
         }
