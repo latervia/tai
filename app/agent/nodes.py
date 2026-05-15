@@ -1,13 +1,13 @@
-"""LangGraph 节点定义 — 每个节点对应一个 Agent 或编排逻辑"""
+"""LangGraph 节点定义 — 所有节点函数 + 路由逻辑"""
 import json
 import re
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, AIMessage
 
 from app.agent.state import MultiAgentState
 from app.agent.base import BaseAgent
 from app.agent.registry import AgentRegistry
-from app.agent.prompts.manager import get_prompt_manager
+from app.core.deps import get_prompt_manager
 from app.core.logger import logger
 
 
@@ -28,35 +28,27 @@ def create_agent_node(agent: BaseAgent):
 # ── Supervisor 节点 ──────────────────────────────────────
 
 async def supervisor_node(state: MultiAgentState, dispatcher) -> dict:
-    """Supervisor 节点 — 分析意图并决策路由
-
-    动态从 AgentRegistry 获取可用 Agent 列表，
-    使用 LLM 分析用户意图，输出 next_agent 决策。
-    """
+    """Supervisor — 分析意图并决策路由"""
     logger.info("[Supervisor] 开始分析意图")
+    session_id = state.get("session_id", "")
 
-    # 动态获取已注册的 Agent 列表
     agents = AgentRegistry.list_agents()
     agent_list_str = "\n".join(
         f"- {a['name']}: {a['description']}" for a in agents
     )
 
-    # 加载 supervisor prompt（PromptManager 自动处理回退）
-    prompt_manager = get_prompt_manager()
-    system_prompt = prompt_manager.get("supervisor", agent_list=agent_list_str)
-
-    # 构建完整上下文（不污染原始 messages）
+    system_prompt = get_prompt_manager().get("supervisor", agent_list=agent_list_str)
     full_messages = [SystemMessage(content=system_prompt)] + list(state["messages"])
 
     try:
-        result = await dispatcher.think(full_messages)
+        result = await dispatcher.think(
+            full_messages, session_id=session_id, agent_name="supervisor",
+        )
         content = result["message"].content
-
         decision = _extract_json(content)
         next_agent = decision.get("next_agent")
         reason = decision.get("reason", "")
 
-        # 验证路由目标是否合法
         if next_agent and AgentRegistry.get(next_agent) is None:
             logger.warning(f"[Supervisor] 路由到未知 Agent: {next_agent}，回退到 null")
             next_agent = None
@@ -70,31 +62,52 @@ async def supervisor_node(state: MultiAgentState, dispatcher) -> dict:
     except Exception as e:
         logger.error(f"[Supervisor] 路由分析失败: {e}")
         return {
-            "next_agent": "chat_agent",     # 出错时回退到通用对话 Agent
+            "next_agent": "chat_agent",
             "agent_outputs": {"supervisor": {"error": str(e), "fallback": "chat_agent"}},
         }
 
 
 def _extract_json(text: str) -> dict:
-    """从 LLM 输出中提取 JSON 对象"""
-    # 匹配 ```json ... ``` 代码块
     match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
     if match:
         return json.loads(match.group(1))
-    # 匹配裸 JSON 对象
     match = re.search(r'\{[\s\S]*\}', text)
     if match:
         return json.loads(match.group(0))
     return {}
 
 
+# ── Finalize 节点 ────────────────────────────────────────
+
+async def finalize_node(state: MultiAgentState) -> dict:
+    """汇总节点 — 透传 Agent 回复或生成兜底"""
+    logger.info("[Finalize] 汇总结果")
+
+    messages = state.get("messages", [])
+    if messages:
+        last_msg = messages[-1]
+        if isinstance(last_msg, AIMessage) and last_msg.content:
+            return {}
+
+    outputs = state.get("agent_outputs", {})
+    parts = []
+    for agent_name, output in outputs.items():
+        if agent_name == "supervisor":
+            continue
+        if isinstance(output, dict) and output.get("content"):
+            parts.append(output["content"])
+        elif isinstance(output, dict) and output.get("status") == "failed":
+            parts.append(f"[{agent_name}] 处理失败")
+
+    if parts:
+        return {"messages": [AIMessage(content="\n\n".join(parts))]}
+    return {"messages": [AIMessage(content="抱歉，我暂时无法处理这个请求。")]}
+
+
 # ── 路由函数 ─────────────────────────────────────────────
 
 def route_after_supervisor(state: MultiAgentState) -> str:
-    """根据 Supervisor 的决策路由到下一个节点
-
-    动态匹配已注册 Agent 名称，未知 Agent 或 null → finalize。
-    """
+    """Supervisor 决策 → LangGraph 节点名称"""
     next_agent = state.get("next_agent")
     if next_agent and AgentRegistry.get(next_agent) is not None:
         return next_agent

@@ -175,12 +175,4 @@ class TraceCollector:
         )
 
 
-# 全局追踪收集器
-_trace_collector: Optional[TraceCollector] = None
-
-
-def get_trace_collector() -> TraceCollector:
-    global _trace_collector
-    if _trace_collector is None:
-        _trace_collector = TraceCollector()
-    return _trace_collector
+# 全局追踪收集器通过 app.core.deps.get_trace_collector() 统一管理

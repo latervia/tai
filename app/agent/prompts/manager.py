@@ -143,12 +143,5 @@ class PromptManager:
         return versions
 
 
-# 全局单例
-_prompt_manager: Optional[PromptManager] = None
-
-
-def get_prompt_manager() -> PromptManager:
-    global _prompt_manager
-    if _prompt_manager is None:
-        _prompt_manager = PromptManager()
-    return _prompt_manager
+# 全局单例通过 app.core.deps.get_prompt_manager() 统一管理，
+# 此处不再维护独立的惰性初始化。

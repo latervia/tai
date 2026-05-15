@@ -115,12 +115,4 @@ class CostController:
         return self._daily_total
 
 
-# 全局成本控制器
-_cost_controller: CostController = None
-
-
-def get_cost_controller() -> CostController:
-    global _cost_controller
-    if _cost_controller is None:
-        _cost_controller = CostController()
-    return _cost_controller
+# 全局成本控制器通过 app.core.deps.get_cost_controller() 统一管理
