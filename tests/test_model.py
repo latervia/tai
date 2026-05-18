@@ -2,10 +2,10 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.core.model.model_dispatcher import ModelDispatcher, BudgetExceededError
-from app.core.model.model_factory import ModelProvider
-from app.core.cost import CostController
-from app.core import deps
+from app.infrastructure.llm.dispatcher import ModelDispatcher, BudgetExceededError
+from app.infrastructure.llm.factory import ModelProvider
+from app.shared.cost import CostController
+import app.deps as deps
 
 
 @pytest.fixture(autouse=True)

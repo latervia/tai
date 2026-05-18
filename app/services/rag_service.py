@@ -5,12 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.core.logger import logger
-from app.core.postgre_manager import get_db
-from app.core.storage.minio_storage import MinioStorage, get_minio_storage
-from app.models.postgre_models import KBModel, DocumentModel
-from app.rag.pipeline.build_pipeline import build_pipeline
-from app.schemas.rag import KBCreateReq
+from app.shared.logger import logger
+from app.infrastructure.database.postgres import get_db
+from app.infrastructure.storage.minio import MinioStorage, get_minio_storage
+from app.infrastructure.database.models import KBModel, DocumentModel
+from app.domain.rag.pipeline.build_pipeline import build_pipeline
+from app.delivery.fastapi.schemas.rag import KBCreateReq
 
 
 class RagService:

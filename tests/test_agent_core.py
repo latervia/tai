@@ -3,16 +3,16 @@ import pytest
 import uuid
 from unittest.mock import MagicMock, AsyncMock
 
-from app.agent.types import (
+from app.domain.agent.types import (
     AgentStatus, RiskLevel, ToolDef, ActionResult, ApprovalRequest,
 )
-from app.agent.tools.registry import ToolRegistry
-from app.agent.workers.chat_agent import ChatAgent
-from app.agent.workers.rag_agent import RAGAgent
-from app.agent.registry import AgentRegistry, bootstrap_agents
-from app.agent.approval import ApprovalManager
-from app.agent.prompts.manager import PromptManager
-from app.core import deps
+from app.domain.agent.tools.registry import ToolRegistry
+from app.domain.agent.workers.chat_agent import ChatAgent
+from app.domain.agent.workers.rag_agent import RAGAgent
+from app.domain.agent.registry import AgentRegistry, bootstrap_agents
+from app.domain.agent.approval import ApprovalManager
+from app.domain.agent.prompts.manager import PromptManager
+import app.deps as deps
 
 
 # ── 每个测试前重置全局状态 ─────────────────────────────

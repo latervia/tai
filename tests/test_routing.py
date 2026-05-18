@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock
 
 from langchain_core.messages import HumanMessage, AIMessage
 
-from app.agent.nodes import (
+from app.domain.agent.nodes import (
     route_after_supervisor,
     _extract_json,
     create_agent_node,
 )
-from app.agent.registry import AgentRegistry, bootstrap_agents
-from app.agent.workers.chat_agent import ChatAgent
-from app.core import deps
+from app.domain.agent.registry import AgentRegistry, bootstrap_agents
+from app.domain.agent.workers.chat_agent import ChatAgent
+import app.deps as deps
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +57,7 @@ class TestRouting:
 class TestFinalizeNode:
     def test_passthrough_ai_message(self):
         import asyncio
-        from app.agent.nodes import finalize_node
+        from app.domain.agent.nodes import finalize_node
 
         async def _run():
             msg = AIMessage(content="final answer")
@@ -69,7 +69,7 @@ class TestFinalizeNode:
 
     def test_fallback_when_no_ai_message(self):
         import asyncio
-        from app.agent.nodes import finalize_node
+        from app.domain.agent.nodes import finalize_node
 
         async def _run():
             state = {
