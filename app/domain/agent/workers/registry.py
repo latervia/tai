@@ -1,7 +1,7 @@
 """Agent 注册表 — 集中管理所有可用 Agent 的元数据"""
 from typing import Optional
 
-from app.domain.agent.base import BaseAgent
+from app.domain.agent.workers.base import BaseAgent
 from app.shared.logger import logger
 
 

@@ -1,18 +1,17 @@
 """Agent 核心组件单元测试 — 适配重构后的结构"""
-import pytest
 import uuid
 from unittest.mock import MagicMock, AsyncMock
 
-from app.domain.agent.types import (
-    AgentStatus, RiskLevel, ToolDef, ActionResult, ApprovalRequest,
-)
+import pytest
+
+import app.deps as deps
+from app.domain.agent.human.approval import ApprovalManager
 from app.domain.agent.tools.registry import ToolRegistry
+from app.domain.agent.types import (
+    RiskLevel, ToolDef, )
 from app.domain.agent.workers.chat_agent import ChatAgent
 from app.domain.agent.workers.rag_agent import RAGAgent
-from app.domain.agent.registry import AgentRegistry, bootstrap_agents
-from app.domain.agent.approval import ApprovalManager
-from app.domain.agent.prompts.manager import PromptManager
-import app.deps as deps
+from app.domain.agent.workers.registry import AgentRegistry, bootstrap_agents
 
 
 # ── 每个测试前重置全局状态 ─────────────────────────────

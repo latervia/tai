@@ -1,7 +1,7 @@
 """对话 Agent — 处理通用对话和简单问答"""
 from langchain_core.language_models import BaseChatModel
 
-from app.domain.agent.base import BaseAgent
+from app.domain.agent.workers.base import BaseAgent
 
 
 class ChatAgent(BaseAgent):

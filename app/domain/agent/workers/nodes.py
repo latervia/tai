@@ -4,10 +4,10 @@ import re
 
 from langchain_core.messages import SystemMessage, AIMessage
 
-from app.domain.agent.state import MultiAgentState
-from app.domain.agent.base import BaseAgent
-from app.domain.agent.registry import AgentRegistry
 from app.deps import get_prompt_manager
+from app.domain.agent.states.state import MultiAgentState
+from app.domain.agent.workers.base import BaseAgent
+from app.domain.agent.workers.registry import AgentRegistry
 from app.shared.logger import logger
 
 

@@ -1,7 +1,7 @@
 """RAG Agent — 知识检索增强生成"""
 from langchain_core.language_models import BaseChatModel
 
-from app.domain.agent.base import BaseAgent
+from app.domain.agent.workers.base import BaseAgent
 
 
 class RAGAgent(BaseAgent):

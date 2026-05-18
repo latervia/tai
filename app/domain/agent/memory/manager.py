@@ -2,7 +2,7 @@
 import time
 from typing import Optional
 
-from app.domain.agent.state import MultiAgentState
+from app.domain.agent.states.state import MultiAgentState
 from app.shared.logger import logger
 
 

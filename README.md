@@ -149,7 +149,7 @@ rm app/delivery/fastapi/routers/rag.py
 ```python
 # ✅ domain 层：只能 import shared
 from app.shared.logger import logger
-from app.domain.agent.base import BaseAgent
+from app.domain.agent.workers.base import BaseAgent
 
 # ❌ domain 层：禁止 import infrastructure 或框架
 # from app.infrastructure.llm import ModelDispatcher  ← 违规

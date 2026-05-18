@@ -5,8 +5,6 @@
 """
 from typing import Optional
 
-from app.shared.config import settings
-
 
 # ── 延迟导入以避免循环依赖 ──────────────────────────────
 
@@ -21,7 +19,7 @@ def _create_cost_controller():
 
 
 def _create_approval_manager():
-    from app.domain.agent.approval import ApprovalManager
+    from app.domain.agent.human.approval import ApprovalManager
     return ApprovalManager()
 
 

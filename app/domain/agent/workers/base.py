@@ -1,12 +1,11 @@
 """BaseAgent — 所有 Agent 的基类，封装 LLM 调用 + 工具使用循环 + 横切关注点"""
-import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolMessage, SystemMessage
 
-from app.domain.agent.state import MultiAgentState
+from app.domain.agent.states.state import MultiAgentState
 from app.domain.agent.tools.registry import ToolRegistry
 from app.domain.agent.types import ActionResult, AgentStatus, RiskLevel
 from app.shared.logger import logger

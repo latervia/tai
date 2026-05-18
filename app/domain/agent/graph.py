@@ -5,19 +5,19 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import StateGraph, END
 
-from app.domain.agent.base import BaseAgent
-from app.domain.agent.registry import AgentRegistry, bootstrap_agents
-from app.domain.agent.state import MultiAgentState
-from app.domain.agent.nodes import (
+from app.domain.agent.states.state import MultiAgentState
+from app.domain.agent.workers.base import BaseAgent
+from app.domain.agent.workers.nodes import (
     create_agent_node,
     supervisor_node,
     finalize_node,
     route_after_supervisor,
 )
-from app.shared.config import settings
-from app.shared.logger import logger
+from app.domain.agent.workers.registry import AgentRegistry, bootstrap_agents
 from app.infrastructure.llm.dispatcher import ModelDispatcher
 from app.infrastructure.llm.factory import ModelProvider
+from app.shared.config import settings
+from app.shared.logger import logger
 
 
 # ── 图构建 ───────────────────────────────────────────────

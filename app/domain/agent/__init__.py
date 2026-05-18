@@ -1,10 +1,7 @@
 from app.domain.agent.graph import GraphRuntime
-from app.domain.agent.base import BaseAgent
-from app.domain.agent.state import MultiAgentState
-from app.domain.agent.registry import AgentRegistry, bootstrap_agents
+from app.domain.agent.human.approval import ApprovalManager
+from app.domain.agent.states.state import MultiAgentState
 from app.domain.agent.tools.registry import ToolRegistry
-from app.domain.agent.approval import ApprovalManager
-
 # types — 轻量数据模型
 from app.domain.agent.types import (
     AgentStatus,
@@ -13,6 +10,8 @@ from app.domain.agent.types import (
     ActionResult,
     ApprovalRequest,
 )
+from app.domain.agent.workers.base import BaseAgent
+from app.domain.agent.workers.registry import AgentRegistry, bootstrap_agents
 
 __all__ = [
     # 运行时
