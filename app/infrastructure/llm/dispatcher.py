@@ -1,12 +1,12 @@
 """模型调度器 — LLM 调用的统一入口，含限流、重试、追踪、成本控制"""
-import time
 import asyncio
+import time
 from typing import Optional
 
 from langchain_core.messages import BaseMessage
 
-from app.shared.logger import logger
 from app.infrastructure.llm.factory import ModelProvider, ModelFactory
+from app.shared.logger import logger
 
 
 class BudgetExceededError(Exception):
@@ -27,12 +27,12 @@ class ModelDispatcher:
     """
 
     def __init__(
-        self,
-        primary_provider: ModelProvider,
-        *,
-        max_retries: int = 2,
-        token_budget: Optional[int] = None,
-        base_delay: float = 1.0,
+            self,
+            primary_provider: ModelProvider,
+            *,
+            max_retries: int = 2,
+            token_budget: Optional[int] = None,
+            base_delay: float = 1.0,
     ):
         self.primary_llm = ModelFactory.get_model(primary_provider)
         self.fallback_llm = ModelFactory.get_model(ModelProvider.OLLAMA)
@@ -44,12 +44,12 @@ class ModelDispatcher:
         self._call_count: int = 0
         self._call_records: list[dict] = []
 
-    # ── 公共接口 ──────────────────────────────────────────
+    # 公共接口
 
     async def invoke(
-        self, messages: list[BaseMessage], *,
-        session_id: str = "", agent_name: str = "",
-        **kwargs,
+            self, messages: list[BaseMessage], *,
+            session_id: str = "", agent_name: str = "",
+            **kwargs,
     ) -> dict:
         """调用 LLM，自动处理重试和 fallback"""
         return await self._invoke_with_retry(
@@ -59,9 +59,9 @@ class ModelDispatcher:
         )
 
     async def think(
-        self, messages: list[BaseMessage], *,
-        session_id: str = "", agent_name: str = "supervisor",
-        **kwargs,
+            self, messages: list[BaseMessage], *,
+            session_id: str = "", agent_name: str = "supervisor",
+            **kwargs,
     ) -> dict:
         """轻量调用 — 用于路由判断等简单任务"""
         kwargs.setdefault("temperature", 0.1)
@@ -69,10 +69,10 @@ class ModelDispatcher:
             messages, session_id=session_id, agent_name=agent_name, **kwargs,
         )
 
-    # ── 内部实现 ──────────────────────────────────────────
+    # 内部实现
 
     async def _invoke_with_retry(
-        self, llm, messages, *, session_id: str, agent_name: str, **kwargs,
+            self, llm, messages, *, session_id: str, agent_name: str, **kwargs,
     ) -> dict:
         last_error = None
 
@@ -86,7 +86,7 @@ class ModelDispatcher:
                     break
                 if attempt < self.max_retries:
                     delay = self.base_delay * (2 ** attempt)
-                    logger.warning(f"LLM 调用失败 (attempt {attempt+1})，{delay}s 后重试: {e}")
+                    logger.warning(f"LLM 调用失败 (attempt {attempt + 1})，{delay}s 后重试: {e}")
                     await asyncio.sleep(delay)
                 else:
                     logger.error(f"LLM 重试耗尽: {e}")
@@ -104,7 +104,7 @@ class ModelDispatcher:
         raise last_error or RuntimeError("LLM 调用失败且无 fallback")
 
     async def _do_invoke(
-        self, llm, messages, *, session_id: str, agent_name: str, **kwargs,
+            self, llm, messages, *, session_id: str, agent_name: str, **kwargs,
     ) -> dict:
         """单次 LLM 调用 + token 追踪 + 成本控制"""
         start = time.time()
@@ -154,7 +154,7 @@ class ModelDispatcher:
             "duration_ms": duration_ms,
         }
 
-    # ── 辅助方法 ──────────────────────────────────────────
+    # 辅助方法
 
     @staticmethod
     def _extract_tokens(response) -> dict:
@@ -180,7 +180,7 @@ class ModelDispatcher:
                 return True
         return any(kw in msg for kw in ["invalid request", "invalid api key", "permission", "quota"])
 
-    # ── 查询接口 ──────────────────────────────────────────
+    # 查询接口
 
     @property
     def tokens_used(self) -> int:
