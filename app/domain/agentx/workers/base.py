@@ -105,6 +105,11 @@ class ToolRegistry:
         cls._agent_permissions.clear()
 
 
+"""
+BaseAgent 定义了多智能体系统中各 Agent 的基础结构和执行流程
+"""
+
+
 class BaseAgent(ABC):
 
     # 子类必须定义
