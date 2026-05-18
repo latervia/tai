@@ -1,5 +1,8 @@
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable, Optional, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
@@ -14,6 +17,92 @@ class AgentStatus(str, Enum):
     ACTING = "acting"  # 正在执行操作
     DONE = "done"  # 已完成任务
     FAILED = "failed"  # 执行任务失败
+
+
+class RiskLevel(str, Enum):
+    """操作风险等级"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class ToolDef:
+    """工具定义"""
+    name: str
+    description: str
+    fn: Callable
+    parameters: Optional[dict] = None  # JSON Schema 参数定义
+    permissions: list[str] = field(default_factory=list)
+    risk_level: RiskLevel = RiskLevel.LOW  # 高于 MEDIUM 需审批
+
+
+@dataclass
+class ActionResult:
+    """工具执行结果"""
+    success: bool
+    output: Any = None
+    error: Optional[str] = None
+    tool_name: Optional[str] = None
+    duration_ms: float = 0.0
+    needs_approval: bool = False  # 需要人类审批才能继续
+
+
+class ToolRegistry:
+    """全局工具注册中心
+
+    新工具只需注册一次，各 Agent 通过权限过滤获取可用工具集。
+    """
+    _tools: dict[str, ToolDef] = {}
+    _agent_permissions: dict[str, list[str]] = {}
+
+    @classmethod
+    def register(
+            cls,
+            name: str,
+            fn: Callable,
+            *,
+            description: str = "",
+            parameters: Optional[dict] = None,
+            permissions: Optional[list[str]] = None,
+            risk_level: RiskLevel = RiskLevel.LOW,
+    ):
+        cls._tools[name] = ToolDef(
+            name=name,
+            description=description,
+            fn=fn,
+            parameters=parameters,
+            permissions=permissions or [],
+            risk_level=risk_level,
+        )
+
+    @classmethod
+    def grant(cls, agent_name: str, permissions: list[str]):
+        """授予某个 Agent 一组工具权限"""
+        cls._agent_permissions[agent_name] = permissions
+
+    @classmethod
+    def get(cls, name: str) -> Optional[ToolDef]:
+        return cls._tools.get(name)
+
+    @classmethod
+    def get_for_agent(cls, agent_name: str) -> list[ToolDef]:
+        """获取某 Agent 有权使用的工具列表"""
+        allowed = cls._agent_permissions.get(agent_name, [])
+        return [
+            tool for tool in cls._tools.values()
+            if any(p in allowed for p in tool.permissions)
+        ]
+
+    @classmethod
+    def list_all(cls) -> dict[str, ToolDef]:
+        return dict(cls._tools)
+
+    @classmethod
+    def clear(cls):
+        cls._tools.clear()
+        cls._agent_permissions.clear()
 
 
 class BaseAgent(ABC):
@@ -124,7 +213,6 @@ class BaseAgent(ABC):
             }
 
     async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ActionResult:
-        import time
         start = time.time()
 
         tool_def = ToolRegistry.get(tool_name)
