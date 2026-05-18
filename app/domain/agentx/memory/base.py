@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.domain.agentx.states.state import State
+
 
 @dataclass
 class Memory:
@@ -30,6 +32,11 @@ class BaseMemory(ABC):
     @abstractmethod
     async def forget(self, session_id: str) -> int:
         """清除指定 session 的全部记忆，返回清除条数"""
+        ...
+
+    @abstractmethod
+    async def extract_from_state(self, state: State) -> list[Memory]:
+        """从多智能体状态中提取记忆"""
         ...
 
     @abstractmethod
