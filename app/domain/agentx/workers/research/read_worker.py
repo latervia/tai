@@ -90,15 +90,21 @@ class ReadWorker(BaseAgent):
         results = state.get("search_results")
         if not results:
             return []
-        # 只传 title/url/snippet 给 LLM，不需要原始结果里的其他字段
+
         brief = [
             {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("snippet", "")}
             for r in results
         ]
-        return [SystemMessage(
-            content=f"以下是待浏览的搜索结果列表：\n\n```json\n{json.dumps(brief, ensure_ascii=False, indent=2)}\n```\n\n"
-                    f"请挑选最有价值的页面，依次调用 web_fetch 抓取全文。"
-        )]
+        parts = [f"## 搜索结果\n```json\n{json.dumps(brief, ensure_ascii=False, indent=2)}\n```"]
+
+        # 标注已抓取过的 URL，避免重复
+        existing = state.get("collected_sources", [])
+        if existing:
+            fetched_urls = [s.get("url", "") for s in existing if s.get("url")]
+            parts.append(f"## 已抓取 URL（跳过这些）\n```json\n{json.dumps(fetched_urls, ensure_ascii=False)}\n```")
+
+        parts.append("请从未抓取的 URL 中挑选最有价值的页面，依次调用 web_fetch。")
+        return [SystemMessage(content="\n\n".join(parts))]
 
     async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ToolResult:
         result = await super()._execute_tool(session_id, tool_name, tool_args)

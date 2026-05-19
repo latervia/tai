@@ -90,15 +90,34 @@ class SearchWorker(BaseAgent):
     # ---------- 三个扩展点 ----------
 
     def _extra_messages(self, state: State) -> list:
-        """注入研究大纲"""
+        """注入研究大纲 + 回退场景下的评审建议"""
         plan = state.get("research_plan")
-        if not plan:
+        review = state.get("review_result")
+
+        msgs: list = []
+
+        if plan:
+            plan_text = json.dumps(plan, ensure_ascii=False, indent=2)
+            msgs.append(SystemMessage(
+                content=f"## 研究大纲\n```json\n{plan_text}\n```"
+            ))
+
+        if review and review.get("verdict") == "revise":
+            suggestions = review.get("suggestions", [])
+            issues = review.get("issues", [])
+            gap_text = json.dumps(
+                {"suggestions": suggestions, "issues": issues},
+                ensure_ascii=False, indent=2,
+            )
+            msgs.append(SystemMessage(
+                content=f"## 上一轮评审反馈（请根据以下方向补充搜索）\n```json\n{gap_text}\n```"
+            ))
+
+        if not msgs:
             return []
-        plan_text = json.dumps(plan, ensure_ascii=False, indent=2)
-        return [SystemMessage(
-            content=f"以下是你需要执行搜索的研究大纲：\n\n```json\n{plan_text}\n```\n\n"
-                    f"请依次为每个章节的 search_queries 调用 web_search 工具。"
-        )]
+
+        msgs[-1].content += "\n\n请为每个章节的 search_queries 调用 web_search 工具。"
+        return msgs
 
     async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ToolResult:
         """执行工具并收集搜索结果"""

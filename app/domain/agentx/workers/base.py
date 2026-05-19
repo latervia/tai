@@ -52,10 +52,6 @@ class BaseAgent(ABC):
     def max_tool_rounds(self) -> int:
         return 5
 
-    def _extra_messages(self, state: State) -> list:
-        """子类可覆盖此方法，向 LLM 消息列表中注入额外上下文（如研究大纲）"""
-        return []
-
     # 构造
     def __init__(self, model: BaseChatModel):
         self.model = model  # 具体类型由子类定义
@@ -135,6 +131,10 @@ class BaseAgent(ABC):
                 "messages": [AIMessage(content=f"抱歉，处理您的请求时出错了：{e}")],
                 "agent_outputs": {self.name: {"error": str(e)}},
             }
+
+    def _extra_messages(self, state: State) -> list:
+        """子类可覆盖此方法，向 LLM 消息列表中注入额外上下文（如研究大纲）"""
+        return []
 
     async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ToolResult:
         start = time.time()
