@@ -1,13 +1,14 @@
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Optional, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 
+from app.domain.agentx.human.risk_level import RiskLevel
 from app.domain.agentx.states.state import State
+from app.domain.agentx.tools.tool_registry import ToolRegistry
+from app.domain.agentx.tools.tool_result import ToolResult
 from app.shared import logger
 
 
@@ -17,92 +18,6 @@ class AgentStatus(str, Enum):
     ACTING = "acting"  # 正在执行操作
     DONE = "done"  # 已完成任务
     FAILED = "failed"  # 执行任务失败
-
-
-class RiskLevel(str, Enum):
-    """操作风险等级"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-@dataclass
-class ToolDef:
-    """工具定义"""
-    name: str
-    description: str
-    fn: Callable
-    parameters: Optional[dict] = None  # JSON Schema 参数定义
-    permissions: list[str] = field(default_factory=list)
-    risk_level: RiskLevel = RiskLevel.LOW  # 高于 MEDIUM 需审批
-
-
-@dataclass
-class ActionResult:
-    """工具执行结果"""
-    success: bool
-    output: Any = None
-    error: Optional[str] = None
-    tool_name: Optional[str] = None
-    duration_ms: float = 0.0
-    needs_approval: bool = False  # 需要人类审批才能继续
-
-
-class ToolRegistry:
-    """全局工具注册中心
-
-    新工具只需注册一次，各 Agent 通过权限过滤获取可用工具集。
-    """
-    _tools: dict[str, ToolDef] = {}
-    _agent_permissions: dict[str, list[str]] = {}
-
-    @classmethod
-    def register(
-            cls,
-            name: str,
-            fn: Callable,
-            *,
-            description: str = "",
-            parameters: Optional[dict] = None,
-            permissions: Optional[list[str]] = None,
-            risk_level: RiskLevel = RiskLevel.LOW,
-    ):
-        cls._tools[name] = ToolDef(
-            name=name,
-            description=description,
-            fn=fn,
-            parameters=parameters,
-            permissions=permissions or [],
-            risk_level=risk_level,
-        )
-
-    @classmethod
-    def grant(cls, agent_name: str, permissions: list[str]):
-        """授予某个 Agent 一组工具权限"""
-        cls._agent_permissions[agent_name] = permissions
-
-    @classmethod
-    def get(cls, name: str) -> Optional[ToolDef]:
-        return cls._tools.get(name)
-
-    @classmethod
-    def get_for_agent(cls, agent_name: str) -> list[ToolDef]:
-        """获取某 Agent 有权使用的工具列表"""
-        allowed = cls._agent_permissions.get(agent_name, [])
-        return [
-            tool for tool in cls._tools.values()
-            if any(p in allowed for p in tool.permissions)
-        ]
-
-    @classmethod
-    def list_all(cls) -> dict[str, ToolDef]:
-        return dict(cls._tools)
-
-    @classmethod
-    def clear(cls):
-        cls._tools.clear()
-        cls._agent_permissions.clear()
 
 
 """
@@ -137,6 +52,10 @@ class BaseAgent(ABC):
     def max_tool_rounds(self) -> int:
         return 5
 
+    def _extra_messages(self, state: State) -> list:
+        """子类可覆盖此方法，向 LLM 消息列表中注入额外上下文（如研究大纲）"""
+        return []
+
     # 构造
     def __init__(self, model: BaseChatModel):
         self.model = model  # 具体类型由子类定义
@@ -160,7 +79,7 @@ class BaseAgent(ABC):
         logger.info(f"[{self.name}] 开始执行")
 
         try:
-            messages = [SystemMessage(content=self.system_prompt)] + state["messages"]
+            messages = [SystemMessage(content=self.system_prompt)] + self._extra_messages(state) + state["messages"]
 
             for _ in range(self.max_tool_rounds):  # 工具调用轮数控制
                 llm = self._get_llm()
@@ -217,12 +136,12 @@ class BaseAgent(ABC):
                 "agent_outputs": {self.name: {"error": str(e)}},
             }
 
-    async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ActionResult:
+    async def _execute_tool(self, session_id: str, tool_name: str, tool_args: dict) -> ToolResult:
         start = time.time()
 
         tool_def = ToolRegistry.get(tool_name)
         if tool_def is None:
-            return ActionResult(success=False, error=f"工具 '{tool_name}' 未注册", tool_name=tool_name)
+            return ToolResult(success=False, error=f"工具 '{tool_name}' 未注册", tool_name=tool_name)
 
         # 审批检查：risk_level >= HIGH 需要人类确认
         if tool_def.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL):
@@ -239,7 +158,7 @@ class BaseAgent(ABC):
                 import uuid
                 rid = str(uuid.uuid4())
                 am.request(rid, tool_name, tool_args, f"Agent {self.name} 请求执行 {tool_name}", tool_def.risk_level)
-                return ActionResult(
+                return ToolResult(
                     success=False,
                     needs_approval=True,
                     output={"request_id": rid, "tool": tool_name, "args": tool_args},
@@ -261,7 +180,7 @@ class BaseAgent(ABC):
                 success=True, duration_ms=duration,
             )
 
-            return ActionResult(success=True, output=output, tool_name=tool_name, duration_ms=duration)
+            return ToolResult(success=True, output=output, tool_name=tool_name, duration_ms=duration)
         except Exception as e:
             duration = (time.time() - start) * 1000
 
@@ -272,7 +191,7 @@ class BaseAgent(ABC):
                 success=False, duration_ms=duration, error=str(e),
             )
 
-            return ActionResult(success=False, error=str(e), tool_name=tool_name, duration_ms=duration)
+            return ToolResult(success=False, error=str(e), tool_name=tool_name, duration_ms=duration)
 
     def _build_response(self, response: AIMessage) -> dict:
         return {
